@@ -18,4 +18,8 @@ sed -i "s/REMPLACER_PAR_ID_D1/$D1/; s/REMPLACER_PAR_ID_KV/$KV/" wrangler.toml
 $W d1 execute signature --remote --file schema.sql
 $W deploy
 echo "$ADMIN_CODE" | $W secret put ADMIN_TOKEN
+for k in EMAIL_PROVIDER EMAIL_API_KEY EMAIL_FROM OWNER_EMAIL; do
+  if [ -n "${!k:-}" ]; then printf '%s' "${!k}" | $W secret put "$k"; fi
+done
+[ -n "${EMAIL_API_KEY:-}" ] || echo "::warning::Emails automatiques non configurés (secrets EMAIL_API_KEY et EMAIL_FROM absents)."
 echo "Mise en ligne terminée."

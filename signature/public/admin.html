@@ -27,7 +27,7 @@ const app = $("#app");
 let TOKEN = store.get("adm") || "";
 let settings = {profile: {}, seal: null};
 let logoImg = null;
-const EVENTS = {created: "Demande créée", opened: "Lien ouvert", read: "Document lu", signed: "Signé", finalized: "Finalisé et archivé", cancelled: "Annulé", downloaded_final: "Copie finale téléchargée"};
+const EVENTS = {email_sent: "Email envoyé", email_failed: "Échec d'envoi d'email", created: "Demande créée", opened: "Lien ouvert", read: "Document lu", signed: "Signé", finalized: "Finalisé et archivé", cancelled: "Annulé", downloaded_final: "Copie finale téléchargée"};
 
 async function api(path, opts = {}) {
   const r = await fetch("/api/admin" + path, {...opts, headers: {authorization: "Bearer " + TOKEN, ...(opts.headers || {})}});
@@ -100,14 +100,24 @@ async function viewDetail(id) {
   const signerCard = s => h("div", {class: "signer"},
     h("div", {class: "row"}, h("b", {style: "flex:1"}, s.name + (s.role ? ` · ${s.role}` : "")), h("span", {class: "pill " + s.status}, s.status === "signed" ? "Signé" : s.first_opened_at ? "Ouvert" : "Pas encore ouvert")),
     s.status === "signed" ? h("span", {class: "lbl"}, `Signé le ${fmtDate(s.signed_at)} · ${s.country || "?"}${s.city ? ", " + s.city : ""}`) : null,
+    s.email ? h("span", {class: "lbl"}, mailState(s)) : null,
     d.status === "pending" && s.status !== "signed" ? h("div", {class: "field"},
       h("span", {class: "link"}, s.link),
       h("div", {class: "row"},
         h("a", {class: "btn small", href: `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(shareText(s))}`, target: "_blank", rel: "noopener"}, "Envoyer par WhatsApp"),
-        s.email ? h("a", {class: "btn ghost small", href: `mailto:${s.email}?subject=${encodeURIComponent("Document à signer : " + d.title)}&body=${encodeURIComponent(shareText(s))}`}, "Par email") : null,
+        s.email && settings.email?.configured ? resend(s) : null,
+        s.email && !settings.email?.configured ? h("a", {class: "btn ghost small", href: `mailto:${s.email}?subject=${encodeURIComponent("Document à signer : " + d.title)}&body=${encodeURIComponent(shareText(s))}`}, "Par email") : null,
         h("button", {class: "btn ghost small", type: "button", onclick: () => copy(s.link, "Lien")}, "Copier le lien"))) : null,
-    d.status === "final" ? h("div", {class: "row"},
+    d.status === "final" ? h("div", {class: "row"}, s.email && settings.email?.configured ? resend(s) : null,
       h("a", {class: "btn ghost small", href: `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(`Bonjour ${s.name}, le document « ${d.title} » est signé par tous. Ta copie : ${s.link}`)}`, target: "_blank", rel: "noopener"}, "Envoyer sa copie par WhatsApp")) : null);
+  function mailState(s) {
+    const ev = d.events.filter(e => e.signer_id === s.id && (e.type === "email_sent" || e.type === "email_failed")).pop();
+    if (!ev) return `Email : ${s.email}`;
+    const k = ev.detail ? JSON.parse(ev.detail).kind : "";
+    const what = k === "final_copy" ? ["Copie signée", "envoyée"] : ["Lien", "envoyé"];
+    return `${ev.type === "email_sent" ? "✓" : "✗"} ${what[0]} ${ev.type === "email_sent" ? what[1] : "non " + what[1]} à ${s.email} · ${fmtDate(ev.at)}`;
+  }
+  const resend = s => h("button", {class: "btn ghost small", type: "button", onclick: async e => { e.target.disabled = true; try { await api(`/requests/${d.id}/remind?signer=${s.id}`, {method: "POST"}); setStatus(st, `Email renvoyé à ${s.email}.`, "ok"); } catch (er) { setStatus(st, er.message, "err"); } e.target.disabled = false; }}, d.status === "final" ? "Renvoyer la copie" : "Renvoyer l'email");
   const actions = h("div", {class: "row"});
   if (d.status === "pending" && allSigned) actions.append(h("button", {class: "btn", type: "button", onclick: () => finalize(d, st)}, settings.seal ? "Finaliser et sceller" : "Finaliser"));
   if (d.status === "final") actions.append(h("button", {class: "btn", type: "button", onclick: async () => download(d.file_name.replace(/\.pdf$/i, "") + "-signe.pdf", await api(`/requests/${id}/final`))}, "Télécharger le document signé"));
@@ -119,7 +129,7 @@ async function viewDetail(id) {
   const signerName = sid => d.signers.find(s => s.id === sid)?.name || "Toi";
   app.replaceChildren(h("section", {class: "panel"},
     h("div", {class: "row"}, h("button", {class: "icon-btn", type: "button", "aria-label": "Retour", onclick: () => show("docs")}, "←"), h("h2", {style: "flex:1"}, d.title)),
-    d.status === "pending" && !allSigned ? h("p", {class: "note"}, "Envoie à chaque personne son propre lien. Il est personnel : ne le transfère pas à quelqu'un d'autre.") : null,
+    d.status === "pending" && !allSigned ? h("p", {class: "note"}, settings.email?.configured ? "Chaque personne a reçu son lien personnel par email. Tu peux aussi l'envoyer par WhatsApp. Tu recevras un email à chaque signature." : "Envoie à chaque personne son propre lien. Il est personnel : ne le transfère pas à quelqu'un d'autre.") : null,
     d.status === "pending" && allSigned ? h("p", {class: "note"}, "Tout le monde a signé. Finalise pour créer le PDF définitif avec le cachet, le certificat de preuve et le sceau.") : null,
     h("div", {class: "stack", style: "gap:10px"}, d.signers.map(signerCard)),
     actions, st,
@@ -177,7 +187,7 @@ async function finalize(d, st) {
     setStatus(st, "Archivage…");
     await api(`/requests/${d.id}/final`, {method: "PUT", headers: {"content-type": "application/pdf", "x-sealed": p12 ? "1" : "0"}, body: bytes});
     await viewDetail(d.id);
-    setStatus($(".panel .status"), p12 ? "Document finalisé et scellé." : "Document finalisé (sans sceau : configure-le dans « Mon entreprise »).", "ok");
+    setStatus($(".panel .status"), (p12 ? "Document finalisé et scellé." : "Document finalisé (sans sceau : configure-le dans « Mon entreprise »).") + (settings.email?.configured ? " Chaque signataire reçoit sa copie par email." : ""), "ok");
   } catch (e) { setStatus(st, e.message || "La finalisation a échoué.", "err"); }
 }
 async function certificate(doc, d, {F, B, M, stampImg, sealed, when}) {
@@ -249,7 +259,7 @@ function viewNew() {
         h("div", {class: "fields"},
           h("div", {class: "field"}, h("label", {for: `s${i}name`}, "Nom complet"), inp("name", "Prénom Nom")),
           h("div", {class: "field"}, h("label", {for: `s${i}phone`}, "WhatsApp"), inp("phone", "+34 600 000 000", "tel")),
-          h("div", {class: "field"}, h("label", {for: `s${i}email`}, "Email"), inp("email", "nom@exemple.com", "email")),
+          h("div", {class: "field"}, h("label", {for: `s${i}email`}, settings.email?.configured ? "Email (le lien part automatiquement)" : "Email"), inp("email", "nom@exemple.com", "email")),
           h("div", {class: "field"}, h("label", {for: `s${i}role`}, "Rôle"), inp("role", "Membre, Coach…"))));
     }), h("div", {class: "row"}, h("button", {class: "btn ghost small", type: "button", onclick: () => { signers.push({name: "", phone: "", email: "", role: "", placements: []}); drawSigners(); }}, "+ Ajouter un signataire")));
     drawTargets(); check();
@@ -272,7 +282,8 @@ function viewNew() {
     else { const [px, py] = viewer.toPdf(x - SIG_W * k / 2, y + SIG_H * k / 2); signers[target].placements.push({page: viewer.n, x: px, y: py, w: SIG_W, h: SIG_H}); }
     viewer.redraw(); check();
   });
-  function check() { create.disabled = !(buf && titleIn.value.trim() && signers.every(s => s.name.trim() && s.placements.length)); }
+  const emailOk = s => !settings.email?.configured || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email.trim());
+  function check() { create.disabled = !(buf && titleIn.value.trim() && signers.every(s => s.name.trim() && s.placements.length && emailOk(s))); }
   titleIn.oninput = check;
   const fileIn = h("input", {type: "file", accept: "application/pdf,.pdf", id: "pdfIn"});
   fileIn.onchange = async () => {
@@ -297,6 +308,17 @@ function viewNew() {
     h("p", {class: "note"}, "Touche une zone déjà placée pour la retirer. Le cachet est apposé à la finalisation, avec la date du jour."),
     h("div", {class: "row"}, create), st));
   drawSigners();
+}
+
+/* ---------- emails automatiques ---------- */
+function emailPanel() {
+  const e = settings.email || {}, st = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const test = h("button", {class: "btn ghost", type: "button", onclick: async () => { test.disabled = true; setStatus(st, "Envoi…"); try { const r = await api("/test-email", {method: "POST"}); setStatus(st, `Email de test envoyé à ${r.to}. Vérifie aussi les spams.`, "ok"); } catch (er) { setStatus(st, er.message, "err"); } test.disabled = false; }}, "M'envoyer un email de test");
+  return h("section", {class: "panel"}, h("h2", {}, "Emails automatiques"),
+    e.configured
+      ? h("p", {style: "margin:0"}, `Actif via ${e.provider === "brevo" ? "Brevo" : "Resend"}, expéditeur ${e.from}. Les liens partent automatiquement, tu es prévenu à ${e.ownerEmail || "ton email de contact"} à chaque signature, et chaque signataire reçoit le document signé.`)
+      : h("p", {class: "note"}, "Pas encore configuré. Ajoute les secrets EMAIL_PROVIDER, EMAIL_API_KEY et EMAIL_FROM dans GitHub, puis relance la mise en ligne (voir le guide)."),
+    e.configured ? h("div", {class: "row"}, test) : null, st);
 }
 
 /* ---------- réglages de l'entreprise ---------- */
@@ -361,7 +383,8 @@ function viewSettings() {
         settings.profile.hasLogo ? h("button", {class: "btn ghost small", type: "button", onclick: async () => { await api("/logo", {method: "DELETE"}); await loadSettings(); drawPreview(); }}, "Retirer le logo") : null),
       h("div", {class: "row", style: "align-items:center"}, preview, h("p", {class: "note", style: "flex:1;min-width:200px"}, "Aperçu de ton cachet. Il est posé à la finalisation, avec la date du jour, aux endroits choisis pour chaque document.")),
       h("div", {class: "row"}, h("button", {class: "btn", type: "button", onclick: save}, "Enregistrer")), st),
-    h("section", {class: "panel"}, h("h2", {}, "Sceau anti-modification"), sealBox));
+    h("section", {class: "panel"}, h("h2", {}, "Sceau anti-modification"), sealBox),
+    emailPanel());
   drawPreview(); drawSeal();
 }
 

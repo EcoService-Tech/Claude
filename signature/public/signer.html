@@ -52,7 +52,7 @@ function finalView() {
 function signedView() {
   app.replaceChildren(h("section", {class: "panel done"},
     h("div", {class: "big-ok"}, "Merci, c'est signé"),
-    h("p", {style: "margin:0"}, `Ta signature a été enregistrée le ${fmtDate(info.signer.signedAt)}. Quand tout le monde aura signé, le document final sera disponible à cette même adresse : garde ce lien.`)));
+    h("p", {style: "margin:0"}, `Ta signature a été enregistrée le ${fmtDate(info.signer.signedAt)}. Quand tout le monde aura signé, tu recevras le document final par email. Il restera aussi disponible à cette même adresse.`)));
 }
 
 async function signView() {

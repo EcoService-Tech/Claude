@@ -13,7 +13,12 @@ Hébergé gratuitement sur Cloudflare (Workers + D1 + KV), mis en ligne automati
    - `CLOUDFLARE_API_TOKEN` : le jeton
    - `CLOUDFLARE_ACCOUNT_ID` : l'identifiant de compte
    - `SIGNATURE_ADMIN_CODE` : ton code d'accès à l'espace de gestion (12 caractères minimum)
-5. Onglet Actions → « Mettre en ligne l'espace signature » → Run workflow.
+5. Emails automatiques (liens, alerte à chaque signature, copie signée) : ajoute aussi
+   - `EMAIL_PROVIDER` : `resend` ou `brevo`
+   - `EMAIL_API_KEY` : la clé d'API du service
+   - `EMAIL_FROM` : l'expéditeur, par exemple `Mon Club <contrats@mondomaine.com>` (adresse vérifiée chez le service)
+   - `OWNER_EMAIL` (facultatif) : où recevoir les alertes ; sinon l'email de contact de « Mon entreprise »
+6. Onglet Actions → « Mettre en ligne l'espace signature » → Run workflow.
    L'adresse du site s'affiche à la fin du journal (`https://signature.<ton-sous-domaine>.workers.dev`).
 
 Ensuite, chaque modification poussée sur `master` remet le site à jour.

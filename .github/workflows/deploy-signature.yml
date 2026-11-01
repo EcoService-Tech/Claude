@@ -18,6 +18,10 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       ADMIN_CODE: ${{ secrets.SIGNATURE_ADMIN_CODE }}
+      EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+      EMAIL_API_KEY: ${{ secrets.EMAIL_API_KEY }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
