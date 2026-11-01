@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS requests (
   original_hash TEXT,
   original_size INTEGER,
   stamps TEXT NOT NULL DEFAULT '[]',          -- emplacements du cachet [{page,x,y,w}]
+  documents TEXT NOT NULL DEFAULT '[]',       -- documents réunis dans le dossier [{name,from,to,sha256,size}]
   final_hash TEXT,
   finalized_at TEXT
 );

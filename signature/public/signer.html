@@ -23,7 +23,9 @@
 <script>
 const token = location.pathname.split("/").filter(Boolean)[1] || "";
 const app = $("#app");
-const CONSENT = "J'ai lu le document en entier et j'accepte de le signer électroniquement. Ma signature a la même valeur d'engagement que ma signature manuscrite.";
+const consentText = docs => docs.length > 1
+  ? `J'ai lu en entier les ${docs.length} documents suivants : ${docs.map(d => "« " + d.name + " »").join(", ")}. J'accepte de les signer électroniquement. Ma signature a la même valeur d'engagement que ma signature manuscrite.`
+  : "J'ai lu le document en entier et j'accepte de le signer électroniquement. Ma signature a la même valeur d'engagement que ma signature manuscrite.";
 const startedAt = Date.now();
 let info = null, pdfBuf = null;
 
@@ -56,10 +58,13 @@ function signedView() {
 }
 
 async function signView() {
-  const me = info.signer, zones = me.placements;
+  const me = info.signer, zones = me.placements, docs = info.documents || [], CONSENT = consentText(docs);
   const seen = new Set();
+  const where = h("p", {class: "lbl", style: "margin:0;font-weight:600"});
+  const docOf = n => docs.find(d => n >= d.from && n <= d.to);
   const viewer = makeViewer({onRender: v => {
     seen.add(v.n);
+    const d = docOf(v.n); where.textContent = d ? `Document ${docs.indexOf(d) + 1} / ${docs.length} : ${d.name} · page ${v.n - d.from + 1} / ${d.to - d.from + 1}` : "";
     v.overlay.replaceChildren(...zones.filter(z => z.page === v.n).map(z => h("div", {class: "zone mine", style: v.boxStyle(z)}, "Signe ici")));
     progress();
   }});
@@ -75,13 +80,14 @@ async function signView() {
   const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
   const form = h("section", {class: "panel"},
     h("h2", {}, "2. Ta signature"),
+    docs.length > 1 ? h("p", {class: "note"}, "Une seule signature suffit : elle sera apposée sur chacun des documents.") : null,
     h("div", {class: "fields"}, h("div", {class: "field"}, h("label", {for: "fullName"}, "Nom complet"), nameIn), h("div", {class: "field"}, h("label", {for: "idNum"}, "Pièce d'identité (conseillé)"), idIn)),
     pad.el,
     h("label", {class: "check", for: "consent"}, consent, h("span", {}, CONSENT)),
     h("div", {class: "row"}, go), st);
   function progress() {
     const left = viewer.count - seen.size;
-    readNote.textContent = left > 0 ? `Lis toutes les pages avant de signer : encore ${left} page${left > 1 ? "s" : ""} à voir. Utilise les flèches.` : "Tu as vu toutes les pages. Tu peux signer en bas.";
+    readNote.textContent = left > 0 ? `Lis toutes les pages avant de signer : encore ${left} page${left > 1 ? "s" : ""} à voir. Utilise les flèches.` : (docs.length > 1 ? "Tu as vu toutes les pages des documents. Tu peux signer en bas." : "Tu as vu toutes les pages. Tu peux signer en bas.");
     ready();
   }
   function ready() { go.disabled = !(viewer.count && seen.size >= viewer.count && nameIn.value.trim() && consent.checked && pad.png); }
@@ -99,7 +105,8 @@ async function signView() {
     h("section", {class: "panel"},
       h("h2", {}, `Bonjour ${me.name || ""}`),
       h("p", {style: "margin:0"}, `${info.profile.company || "On"} te demande de signer « ${info.title} »${me.role ? " en tant que " + me.role.toLowerCase() : ""}. Ça prend une minute.`),
-      h("h2", {}, "1. Lis le document"), readNote, viewer.el,
+      docs.length > 1 ? h("div", {class: "field"}, h("span", {class: "lbl"}, `${docs.length} documents à lire et signer :`), h("ul", {class: "timeline"}, docs.map((d, i) => h("li", {}, h("button", {class: "btn ghost small", type: "button", onclick: () => viewer.go(d.from)}, `${i + 1}. ${d.name}`))))) : null,
+      h("h2", {}, docs.length > 1 ? "1. Lis les documents" : "1. Lis le document"), readNote, where, viewer.el,
       h("div", {class: "row"}, h("button", {class: "btn ghost small", type: "button", onclick: () => download(info.fileName, pdfBuf)}, "Télécharger pour lire"))),
     form);
   await viewer.load(await openPdf(pdfBuf));

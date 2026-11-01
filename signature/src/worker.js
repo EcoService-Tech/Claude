@@ -99,11 +99,13 @@ async function mailAndLog(env, requestId, signerId, kind, msg) {
 
 async function sendInvite(env, base, requestId, signer) {
   const p = (await getSetting(env, "profile")) || {};
-  const r = await env.DB.prepare("SELECT title FROM requests WHERE id = ?").bind(requestId).first();
+  const r = await env.DB.prepare("SELECT title, documents FROM requests WHERE id = ?").bind(requestId).first();
   if (!signer.email) return;
+  const docs = parse(r.documents) || [];
+  const docList = docs.length > 1 ? `<br><br>Documents à signer :<br>${docs.map(x => "• " + esc(x.name)).join("<br>")}` : "";
   const link = new URL(`/s/${signer.token}`, base).href;
   const html = mailLayout(p, {title: "Document à signer",
-    intro: `Bonjour ${esc(signer.name)},<br><br>${esc(p.company || "Nous")} vous invite à signer électroniquement le document « <b>${esc(r.title)}</b> ». Lisez-le en entier puis signez depuis votre téléphone ou votre ordinateur. Cela prend une minute.`,
+    intro: `Bonjour ${esc(signer.name)},<br><br>${esc(p.company || "Nous")} vous invite à signer électroniquement ${docs.length > 1 ? "le dossier" : "le document"} « <b>${esc(r.title)}</b> ».${docList}<br><br>Lisez tout puis signez depuis votre téléphone ou votre ordinateur. Cela prend une minute.`,
     button: "Lire et signer le document", buttonUrl: link,
     small: "Ce lien est personnel : ne le transférez pas. Une fois que toutes les parties auront signé, vous recevrez automatiquement le document signé par email."});
   await mailAndLog(env, requestId, signer.id, "invitation", {to: signer.email, toName: signer.name, subject: `Document à signer : ${r.title}`, html, text: plain(html), replyTo: p.email || undefined});
@@ -126,7 +128,8 @@ async function sendFinal(env, base, requestId) {
   const r = await env.DB.prepare("SELECT * FROM requests WHERE id = ?").bind(requestId).first();
   const {results: signers} = await env.DB.prepare("SELECT * FROM signers WHERE request_id = ? ORDER BY position").bind(requestId).all();
   const fileName = r.file_name.replace(/\.pdf$/i, "") + "-signe.pdf";
-  const after = `<p style="font-size:13px;line-height:1.5;margin:0 0 8px">Le PDF joint contient le document signé par toutes les parties, le cachet de ${esc(p.company || "l'entreprise")} et le <b>certificat de signature</b> (identités, dates et heures, journal de preuve). Il est scellé électroniquement : toute modification ultérieure serait détectée.</p>
+  const docs = parse(r.documents) || [];
+  const after = (docs.length > 1 ? `<p style="font-size:13px;line-height:1.5;margin:0 0 8px">Documents signés :<br>${docs.map(x => `• ${esc(x.name)} (pages ${x.from} à ${x.to})`).join("<br>")}</p>` : "") + `<p style="font-size:13px;line-height:1.5;margin:0 0 8px">Le PDF joint contient ${docs.length > 1 ? "tous les documents signés" : "le document signé"} par toutes les parties, le cachet de ${esc(p.company || "l'entreprise")} et le <b>certificat de signature</b> (identités, dates et heures, journal de preuve). Il est scellé électroniquement : toute modification ultérieure serait détectée.</p>
 <p style="font-size:12px;color:#5a6578;margin:0;word-break:break-all">Dossier ${esc(r.id)} · Empreinte SHA-256 : ${esc(r.final_hash)}</p>`;
   for (const s of signers) {
     if (!s.email) continue;
@@ -148,7 +151,7 @@ async function sendFinal(env, base, requestId) {
 // ---------------- signataire ----------------
 async function signerByToken(env, token) {
   if (!/^[a-f0-9]{48}$/.test(token)) return null;
-  return env.DB.prepare("SELECT s.*, r.title, r.file_name, r.status AS request_status, r.original_hash, r.final_hash FROM signers s JOIN requests r ON r.id = s.request_id WHERE s.token = ?").bind(token).first();
+  return env.DB.prepare("SELECT s.*, r.title, r.file_name, r.status AS request_status, r.original_hash, r.final_hash, r.documents FROM signers s JOIN requests r ON r.id = s.request_id WHERE s.token = ?").bind(token).first();
 }
 
 async function handleSigner(req, env, parts, url, ctx) {
@@ -162,7 +165,7 @@ async function handleSigner(req, env, parts, url, ctx) {
       await logEvent(env, req, s.request_id, s.id, "opened");
     }
     const profile = publicProfile(await getSetting(env, "profile"));
-    return json({title: s.title, fileName: s.file_name, profile, status: s.request_status, originalHash: s.original_hash, finalHash: s.final_hash,
+    return json({title: s.title, fileName: s.file_name, profile, status: s.request_status, originalHash: s.original_hash, finalHash: s.final_hash, documents: parse(s.documents) || [],
       signer: {name: s.name, role: s.role, email: s.email, status: s.status, signedAt: s.signed_at, placements: parse(s.placements) || []}});
   }
   if (req.method === "GET" && action === "pdf") {
@@ -212,7 +215,7 @@ async function requestDetail(env, id) {
   if (!r) return null;
   const {results: signers} = await env.DB.prepare("SELECT * FROM signers WHERE request_id = ? ORDER BY position").bind(id).all();
   const {results: events} = await env.DB.prepare("SELECT * FROM events WHERE request_id = ? ORDER BY id").bind(id).all();
-  return {...r, stamps: parse(r.stamps) || [], signers: signers.map(s => ({...s, placements: parse(s.placements) || []})), events};
+  return {...r, stamps: parse(r.stamps) || [], documents: parse(r.documents) || [], signers: signers.map(s => ({...s, placements: parse(s.placements) || []})), events};
 }
 
 async function handleAdmin(req, env, parts, url, ctx) {
@@ -288,15 +291,16 @@ async function handleAdmin(req, env, parts, url, ctx) {
       if (!signers.length) return err(400, "Ajoute au moins un signataire.");
       for (const s of signers) if (!String(s.name || "").trim()) return err(400, "Chaque signataire a besoin d'un nom.");
       for (const s of signers) if (!Array.isArray(s.placements) || !s.placements.length) return err(400, `Place la signature de ${s.name} sur le document.`);
+      const docs = (Array.isArray(d.documents) ? d.documents.slice(0, 15) : []).map(x => ({name: String(x.name || "Document").slice(0, 120), from: Math.max(1, +x.from | 0), to: Math.max(1, +x.to | 0), sha256: String(x.sha256 || "").replace(/[^a-f0-9]/g, "").slice(0, 64), size: +x.size | 0}));
       const rid = randomId(8);
-      const stmts = [env.DB.prepare("INSERT INTO requests (id, title, file_name, created_at, status, stamps) VALUES (?,?,?,?, 'draft', ?)")
-        .bind(rid, title, fileName, now(), JSON.stringify(Array.isArray(d.stamps) ? d.stamps.slice(0, 20) : []))];
+      const stmts = [env.DB.prepare("INSERT INTO requests (id, title, file_name, created_at, status, stamps, documents) VALUES (?,?,?,?, 'draft', ?, ?)")
+        .bind(rid, title, fileName, now(), JSON.stringify(Array.isArray(d.stamps) ? d.stamps.slice(0, 40) : []), JSON.stringify(docs))];
       const links = [];
       signers.forEach((s, i) => {
         const sid = randomId(8), token = randomId(24);
         links.push({id: sid, name: s.name, token});
         stmts.push(env.DB.prepare("INSERT INTO signers (id, request_id, position, name, email, phone, role, token, placements) VALUES (?,?,?,?,?,?,?,?,?)")
-          .bind(sid, rid, i, String(s.name).trim().slice(0, 120), String(s.email || "").slice(0, 160), String(s.phone || "").slice(0, 40), String(s.role || "").slice(0, 60), token, JSON.stringify(s.placements.slice(0, 20))));
+          .bind(sid, rid, i, String(s.name).trim().slice(0, 120), String(s.email || "").slice(0, 160), String(s.phone || "").slice(0, 40), String(s.role || "").slice(0, 60), token, JSON.stringify(s.placements.slice(0, 40))));
       });
       await env.DB.batch(stmts);
       return json({id: rid, signers: links});
