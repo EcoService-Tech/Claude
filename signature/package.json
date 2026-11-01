@@ -1,0 +1,29 @@
+{
+  "name": "signature",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@signpdf/placeholder-pdf-lib": "^3.4.0",
+    "@signpdf/signer-p12": "^3.4.0",
+    "@signpdf/signpdf": "^3.4.0",
+    "@signpdf/utils": "^3.4.0",
+    "buffer": "^6.0.3",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.6.0",
+    "node-forge": "^1.4.2",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^3.11.174",
+    "tesseract.js": "^5.1.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "wrangler": "^4.156.0"
+  }
+}

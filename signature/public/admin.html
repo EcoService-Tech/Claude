@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Espace signature</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Caveat:wght@600&display=swap">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo" id="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-6 5-9 7-9s-1 9 2 9 3-5 5-5 2 3 4 3"/><path d="M3 21h18"/></svg></div>
+    <div class="brand"><h1 id="company">Espace signature</h1><p>Signatures à distance, cachet et sceau de ton entreprise.</p></div>
+    <div class="right"><a class="btn ghost small" href="/outils.html">Outils PDF</a><button class="btn ghost small" id="logout" type="button" hidden>Se déconnecter</button></div>
+  </header>
+  <nav class="tabs" id="tabs" role="tablist" hidden></nav>
+  <main id="app" class="stack"></main>
+</div>
+<script src="/vendor/pdf-lib.min.js"></script>
+<script src="/vendor/pdf.min.js"></script>
+<script src="/vendor/seal.js"></script>
+<script src="/common.js"></script>
+<script>
+const app = $("#app");
+let TOKEN = store.get("adm") || "";
+let settings = {profile: {}, seal: null};
+let logoImg = null;
+const EVENTS = {created: "Demande créée", opened: "Lien ouvert", read: "Document lu", signed: "Signé", finalized: "Finalisé et archivé", cancelled: "Annulé", downloaded_final: "Copie finale téléchargée"};
+
+async function api(path, opts = {}) {
+  const r = await fetch("/api/admin" + path, {...opts, headers: {authorization: "Bearer " + TOKEN, ...(opts.headers || {})}});
+  const ct = r.headers.get("content-type") || "";
+  if (r.status === 401) { TOKEN = ""; store.set("adm", null); login("Code d'accès refusé. Saisis-le à nouveau."); throw new Error("Code d'accès refusé."); }
+  if (!r.ok) throw new Error(ct.includes("json") ? (await r.json()).error : "Erreur de connexion.");
+  return ct.includes("json") ? r.json() : r.arrayBuffer();
+}
+
+/* ---------- connexion ---------- */
+function login(msg) {
+  $("#tabs").hidden = true; $("#logout").hidden = true;
+  const code = h("input", {type: "password", id: "code", autocomplete: "current-password"});
+  const st = h("div", {class: "status err"}, msg || "");
+  const go = async () => {
+    TOKEN = code.value.trim(); if (!TOKEN) return;
+    try { await api("/check"); store.set("adm", TOKEN); start(); } catch (e) { setStatus(st, e.message, "err"); }
+  };
+  code.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+  app.replaceChildren(h("section", {class: "panel", style: "max-width:440px"}, h("h2", {}, "Connexion"),
+    h("div", {class: "field"}, h("label", {for: "code"}, "Code d'accès"), code), h("div", {class: "row"}, h("button", {class: "btn", type: "button", onclick: go}, "Entrer")), st));
+  code.focus();
+}
+$("#logout").onclick = () => { TOKEN = ""; store.set("adm", null); login(); };
+
+async function loadSettings() {
+  settings = await api("/settings");
+  const p = settings.profile || {};
+  if (p.company) $("#company").textContent = p.company;
+  if (p.color) document.documentElement.style.setProperty("--accent", p.color);
+  logoImg = null;
+  if (p.hasLogo) { try { logoImg = await loadImage("/api/logo?t=" + Date.now()); $("#logo").replaceChildren(h("img", {src: logoImg.src, alt: ""})); } catch {} }
+}
+
+const TABS = [["docs", "Documents"], ["new", "Nouvelle demande"], ["settings", "Mon entreprise"]];
+function tabs(active) {
+  $("#tabs").hidden = false; $("#logout").hidden = false;
+  $("#tabs").replaceChildren(...TABS.map(([id, l]) => h("button", {role: "tab", "aria-selected": id === active, type: "button", onclick: () => show(id)}, l)));
+}
+function show(id, arg) { tabs(id); ({docs: viewDocs, new: viewNew, settings: viewSettings, detail: viewDetail})[id](arg); window.scrollTo(0, 0); }
+async function start() {
+  try { await loadSettings(); } catch { return; }
+  show(settings.profile?.company ? "docs" : "settings");
+}
+
+/* ---------- liste ---------- */
+async function viewDocs() {
+  app.replaceChildren(h("p", {class: "status"}, "Chargement…"));
+  try {
+    const {requests} = await api("/requests");
+    const LBL = {pending: "En attente", final: "Signé", cancelled: "Annulé"};
+    app.replaceChildren(h("section", {class: "panel"},
+      h("div", {class: "row"}, h("h2", {style: "flex:1"}, "Documents"), h("button", {class: "btn small", type: "button", onclick: () => show("new")}, "+ Nouvelle demande")),
+      requests.length ? h("div", {class: "list"}, requests.map(r => h("button", {class: "item", type: "button", onclick: () => { tabs("docs"); viewDetail(r.id); }},
+        h("div", {class: "grow"}, h("b", {}, r.title), h("span", {}, `${fmtDate(r.created_at)} · ${r.signed} / ${r.total} signature${r.total > 1 ? "s" : ""}`)),
+        h("span", {class: "pill " + (r.status === "pending" && r.signed === r.total ? "final" : r.status)}, r.status === "pending" && r.signed === r.total ? "À finaliser" : LBL[r.status] || r.status))))
+        : h("p", {class: "note"}, "Aucune demande pour l'instant. Crée la première avec « Nouvelle demande ».")));
+  } catch (e) { app.replaceChildren(h("p", {class: "status err"}, e.message)); }
+}
+
+/* ---------- détail d'une demande ---------- */
+async function viewDetail(id) {
+  app.replaceChildren(h("p", {class: "status"}, "Chargement…"));
+  let d; try { d = await api("/requests/" + id); } catch (e) { return app.replaceChildren(h("p", {class: "status err"}, e.message)); }
+  const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const allSigned = d.signers.every(s => s.status === "signed");
+  const shareText = s => `Bonjour ${s.name}, merci de signer « ${d.title} » ici : ${s.link}`;
+  const copy = async (text, label) => { try { await navigator.clipboard.writeText(text); setStatus(st, label + " copié.", "ok"); } catch { setStatus(st, "Copie impossible : sélectionne le lien à la main.", "err"); } };
+  const waNumber = p => String(p || "").replace(/[^\d]/g, "").replace(/^00/, "");
+  const signerCard = s => h("div", {class: "signer"},
+    h("div", {class: "row"}, h("b", {style: "flex:1"}, s.name + (s.role ? ` · ${s.role}` : "")), h("span", {class: "pill " + s.status}, s.status === "signed" ? "Signé" : s.first_opened_at ? "Ouvert" : "Pas encore ouvert")),
+    s.status === "signed" ? h("span", {class: "lbl"}, `Signé le ${fmtDate(s.signed_at)} · ${s.country || "?"}${s.city ? ", " + s.city : ""}`) : null,
+    d.status === "pending" && s.status !== "signed" ? h("div", {class: "field"},
+      h("span", {class: "link"}, s.link),
+      h("div", {class: "row"},
+        h("a", {class: "btn small", href: `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(shareText(s))}`, target: "_blank", rel: "noopener"}, "Envoyer par WhatsApp"),
+        s.email ? h("a", {class: "btn ghost small", href: `mailto:${s.email}?subject=${encodeURIComponent("Document à signer : " + d.title)}&body=${encodeURIComponent(shareText(s))}`}, "Par email") : null,
+        h("button", {class: "btn ghost small", type: "button", onclick: () => copy(s.link, "Lien")}, "Copier le lien"))) : null,
+    d.status === "final" ? h("div", {class: "row"},
+      h("a", {class: "btn ghost small", href: `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(`Bonjour ${s.name}, le document « ${d.title} » est signé par tous. Ta copie : ${s.link}`)}`, target: "_blank", rel: "noopener"}, "Envoyer sa copie par WhatsApp")) : null);
+  const actions = h("div", {class: "row"});
+  if (d.status === "pending" && allSigned) actions.append(h("button", {class: "btn", type: "button", onclick: () => finalize(d, st)}, settings.seal ? "Finaliser et sceller" : "Finaliser"));
+  if (d.status === "final") actions.append(h("button", {class: "btn", type: "button", onclick: async () => download(d.file_name.replace(/\.pdf$/i, "") + "-signe.pdf", await api(`/requests/${id}/final`))}, "Télécharger le document signé"));
+  actions.append(h("button", {class: "btn ghost", type: "button", onclick: async () => download(d.file_name, await api(`/requests/${id}/original`))}, "Original"));
+  if (d.status === "pending") actions.append(h("button", {class: "btn danger small", type: "button", onclick: async () => { await api(`/requests/${id}/cancel`, {method: "POST"}); viewDetail(id); }}, "Annuler la demande"));
+  const del = h("button", {class: "btn danger small", type: "button"}, "Supprimer");
+  del.onclick = async () => { if (del.dataset.armed) { await api("/requests/" + id, {method: "DELETE"}); show("docs"); } else { del.dataset.armed = 1; del.textContent = "Confirmer la suppression définitive"; } };
+  actions.append(del);
+  const signerName = sid => d.signers.find(s => s.id === sid)?.name || "Toi";
+  app.replaceChildren(h("section", {class: "panel"},
+    h("div", {class: "row"}, h("button", {class: "icon-btn", type: "button", "aria-label": "Retour", onclick: () => show("docs")}, "←"), h("h2", {style: "flex:1"}, d.title)),
+    d.status === "pending" && !allSigned ? h("p", {class: "note"}, "Envoie à chaque personne son propre lien. Il est personnel : ne le transfère pas à quelqu'un d'autre.") : null,
+    d.status === "pending" && allSigned ? h("p", {class: "note"}, "Tout le monde a signé. Finalise pour créer le PDF définitif avec le cachet, le certificat de preuve et le sceau.") : null,
+    h("div", {class: "stack", style: "gap:10px"}, d.signers.map(signerCard)),
+    actions, st,
+    d.final_hash ? h("p", {class: "hash"}, "Empreinte SHA-256 du document final : " + d.final_hash) : null,
+    h("h3", {}, "Journal de preuve"),
+    h("ul", {class: "timeline"}, d.events.map(e => h("li", {}, h("time", {}, fmtDate(e.at)), h("span", {}, `${EVENTS[e.type] || e.type}${e.signer_id ? " · " + signerName(e.signer_id) : ""}${e.country ? " · " + e.country : ""}`))))));
+}
+
+/* ---------- finalisation : signatures + cachet + certificat + sceau ---------- */
+function askPassword(title) {
+  return new Promise(resolve => {
+    const pw = h("input", {type: "password", id: "sealPw", autocomplete: "off"});
+    const close = v => { m.remove(); resolve(v); };
+    const m = h("div", {class: "modal"}, h("section", {class: "panel"}, h("h2", {}, title),
+      h("div", {class: "field"}, h("label", {for: "sealPw"}, "Mot de passe du sceau"), pw),
+      h("div", {class: "row"}, h("button", {class: "btn", type: "button", onclick: () => close(pw.value)}, "Valider"), h("button", {class: "btn ghost", type: "button", onclick: () => close(null)}, "Annuler"))));
+    pw.addEventListener("keydown", e => { if (e.key === "Enter") close(pw.value); });
+    document.body.append(m); pw.focus();
+  });
+}
+async function finalize(d, st) {
+  let p12 = null, pass = null;
+  if (settings.seal) {
+    pass = await askPassword("Sceller le document");
+    if (pass == null) return;
+    try { p12 = new Uint8Array(await api("/seal")); Seal.sealInfo(p12, pass); } catch { return setStatus(st, "Mot de passe du sceau incorrect.", "err"); }
+  }
+  setStatus(st, "Assemblage du document…");
+  try {
+    const orig = await api(`/requests/${d.id}/original`);
+    if (await hex256(orig) !== d.original_hash) throw new Error("L'original stocké ne correspond plus à son empreinte. Finalisation arrêtée.");
+    const doc = await PDFDocument.load(orig, {ignoreEncryption: true});
+    const F = await doc.embedFont(StandardFonts.Helvetica), B = await doc.embedFont(StandardFonts.HelveticaBold), M = await doc.embedFont(StandardFonts.Courier);
+    const pages = doc.getPages(), when = new Date();
+    for (const s of d.signers) {
+      const img = await doc.embedPng(await api(`/signature/${s.id}`));
+      for (const z of s.placements) {
+        const pg = pages[z.page - 1]; if (!pg) continue;
+        const k = Math.min(z.w / img.width, (z.h - 9) / img.height), w = img.width * k, hh = img.height * k;
+        pg.drawImage(img, {x: z.x + (z.w - w) / 2, y: z.y + 9 + (z.h - 9 - hh) / 2, width: w, height: hh});
+        pg.drawText(safe(`${s.declared_name || s.name} · ${new Date(s.signed_at).toLocaleDateString("fr-FR")}`), {x: z.x, y: z.y + 1, size: 6.5, font: F, color: rgb(.2, .2, .28)});
+      }
+    }
+    const stampPng = await canvasPng(stampCanvas(settings.profile, {logo: logoImg, date: when}));
+    const stampImg = await doc.embedPng(stampPng);
+    for (const z of d.stamps) { const pg = pages[z.page - 1]; if (pg) pg.drawImage(stampImg, {x: z.x, y: z.y, width: z.w, height: z.w, opacity: .92}); }
+    const total = pages.length;
+    pages.forEach((pg, i) => pg.drawText(safe(`Dossier ${d.id} · signé électroniquement · page ${i + 1}/${total}`), {x: 30, y: 10, size: 6, font: F, color: rgb(.5, .5, .55)}));
+    await certificate(doc, d, {F, B, M, stampImg, sealed: !!p12, when});
+    doc.setSubject(safe(`Signé électroniquement · dossier ${d.id}`));
+    doc.setKeywords(["signature-electronique", "dossier:" + d.id, "sha256-original:" + d.original_hash]);
+    doc.setProducer(safe(settings.profile.company || "Espace signature"));
+    let bytes = await doc.save({useObjectStreams: false});
+    if (p12) { setStatus(st, "Application du sceau…"); bytes = await Seal.sealPdf(bytes, p12, pass, {reason: safe(`Signature électronique : ${d.title}`), location: safe(settings.profile.city || ""), name: safe(settings.profile.company || ""), contact: settings.profile.email || ""}); }
+    setStatus(st, "Archivage…");
+    await api(`/requests/${d.id}/final`, {method: "PUT", headers: {"content-type": "application/pdf", "x-sealed": p12 ? "1" : "0"}, body: bytes});
+    await viewDetail(d.id);
+    setStatus($(".panel .status"), p12 ? "Document finalisé et scellé." : "Document finalisé (sans sceau : configure-le dans « Mon entreprise »).", "ok");
+  } catch (e) { setStatus(st, e.message || "La finalisation a échoué.", "err"); }
+}
+async function certificate(doc, d, {F, B, M, stampImg, sealed, when}) {
+  const W = 595.28, H = 841.89, L = 46, maxW = W - 2 * L, ink = rgb(.08, .1, .15), mut = rgb(.38, .42, .5), prof = settings.profile;
+  let p, y;
+  const page = () => { p = doc.addPage([W, H]); p.drawRectangle({x: 0, y: H - 34, width: W, height: 34, color: rgb(.137, .251, .788)}); p.drawText("CERTIFICAT DE SIGNATURE ELECTRONIQUE", {x: L, y: H - 22, size: 11, font: B, color: rgb(1, 1, 1)}); y = H - 64; };
+  const line = (t, {f = F, size = 9.5, color = ink, gap = 3.5} = {}) => {
+    const words = safe(t).split(" "); let cur = "";
+    const flush = () => { if (y < 60) page(); p.drawText(cur, {x: L, y, size, font: f, color}); y -= size + gap; cur = ""; };
+    for (const w of words) { const tt = cur ? cur + " " + w : w; if (f.widthOfTextAtSize(tt, size) > maxW && cur) { flush(); cur = w; } else cur = tt; }
+    if (cur) flush();
+  };
+  const rule = () => { if (y < 90) page(); p.drawLine({start: {x: L, y: y + 5}, end: {x: W - L, y: y + 5}, thickness: .5, color: rgb(.8, .82, .87)}); y -= 10; };
+  page();
+  line(d.title, {f: B, size: 13, gap: 6});
+  line(`Émetteur : ${prof.company || "—"}${prof.taxId ? " · CIF/NIF " + prof.taxId : ""}${prof.address ? " · " + prof.address : ""}${prof.city ? ", " + prof.city : ""}`);
+  line("Identifiant du dossier : " + d.id, {f: M, size: 8.5});
+  line(`Fichier original : ${d.file_name} (${fmtSize(d.original_size || 0)}), déposé le ${fmtDateLong(d.created_at)}`);
+  line("Empreinte SHA-256 du document original, avant toute signature :", {size: 8.5, color: mut, gap: 1});
+  line(d.original_hash, {f: M, size: 8, gap: 6});
+  line(`Finalisé le ${fmtDateLong(when.toISOString())}${sealed ? `. Scellé électroniquement avec le certificat « ${settings.seal?.org || prof.company} » (empreinte ${String(settings.seal?.fingerprint || "").slice(0, 32)}…).` : "."}`);
+  y -= 4;
+  for (const [n, s] of d.signers.entries()) {
+    const ev = d.events.filter(e => e.signer_id === s.id), read = ev.find(e => e.type === "read"), sig = ev.find(e => e.type === "signed");
+    const rd = read?.detail ? JSON.parse(read.detail) : null, sd = sig?.detail ? JSON.parse(sig.detail) : null;
+    rule();
+    line(`Signataire ${n + 1} : ${s.declared_name || s.name}${s.role ? " (" + s.role + ")" : ""}`, {f: B, size: 11, gap: 5});
+    line(`Nom indiqué par l'expéditeur : ${s.name} · Pièce d'identité déclarée : ${s.declared_id || "non renseignée"}`);
+    line(`Contact utilisé pour l'envoi du lien personnel : ${[s.phone, s.email].filter(Boolean).join(" · ") || "non renseigné"}`);
+    line(`Lien ouvert pour la première fois le : ${fmtDateLong(s.first_opened_at)}`);
+    if (rd) line(`Lecture : ${rd.pages || "?"} page(s) affichée(s), ${rd.seconds || "?"} secondes avant de signer.`);
+    line(`Consentement coché le : ${fmtDateLong(s.consent_at)}`);
+    line(`Signature enregistrée par le serveur le : ${fmtDateLong(s.signed_at)}`, {f: B, size: 9.5});
+    line(`Adresse IP : ${s.ip || "?"} · Localisation approximative : ${[s.city, s.country].filter(Boolean).join(", ") || "?"}`);
+    line(`Mode : signature ${s.method === "type" ? "écrite au clavier" : "dessinée à la main sur l'écran"}. Appareil : ${(s.user_agent || "?").slice(0, 150)}`, {size: 8.5, color: mut});
+    if (sd?.signatureSha256) line(`Empreinte SHA-256 de l'image de signature : ${sd.signatureSha256}`, {f: M, size: 7.5, color: mut});
+    line(`Texte accepté : « ${s.consent_text || ""} »`, {size: 8.5, color: mut, gap: 4});
+  }
+  rule();
+  line("Journal complet du dossier (heure du serveur)", {f: B, size: 10, gap: 5});
+  const who = sid => d.signers.find(s => s.id === sid)?.name || prof.company || "Émetteur";
+  for (const e of d.events) line(`${new Date(e.at).toISOString().replace("T", " ").slice(0, 19)} UTC · ${EVENTS[e.type] || e.type} · ${who(e.signer_id)}${e.ip ? " · IP " + e.ip : ""}${e.country ? " · " + e.country : ""}`, {f: M, size: 7.5, gap: 2.5});
+  line(`${new Date(when).toISOString().replace("T", " ").slice(0, 19)} UTC · Finalisation${sealed ? " et scellement" : ""} · ${prof.company || "Émetteur"}`, {f: M, size: 7.5, gap: 8});
+  if (y < 170) page();
+  p.drawImage(stampImg, {x: W - L - 100, y: y - 100, width: 100, height: 100, opacity: .92});
+  const textW = maxW - 115, legal = "Signatures électroniques au sens de l'article 3.10 du règlement (UE) n° 910/2014 (eIDAS). Selon son article 25.1, une signature électronique ne peut pas être privée d'effet juridique ni de recevabilité comme preuve en justice au seul motif qu'elle se présente sous forme électronique. Chaque signataire a reçu un lien personnel et a confirmé son consentement ; les dates sont celles du serveur. " + (sealed ? "Le sceau électronique appliqué au fichier permet de détecter toute modification postérieure : ouvrez le PDF dans un lecteur qui vérifie les signatures (Adobe Acrobat Reader, par exemple)." : "Conservez l'empreinte SHA-256 du fichier final pour pouvoir prouver qu'il n'a pas été modifié.");
+  const words = safe(legal).split(" "); let cur = "";
+  for (const w of words) { const tt = cur ? cur + " " + w : w; if (F.widthOfTextAtSize(tt, 8) > textW && cur) { p.drawText(cur, {x: L, y, size: 8, font: F, color: mut}); y -= 11; cur = w; } else cur = tt; }
+  if (cur) p.drawText(cur, {x: L, y, size: 8, font: F, color: mut});
+}
+
+/* ---------- nouvelle demande ---------- */
+function viewNew() {
+  let file = null, buf = null, target = 0;
+  const signers = [{name: "", phone: "", email: "", role: "", placements: []}];
+  const stamps = [];
+  const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const titleIn = h("input", {type: "text", id: "title", placeholder: "ex. Contrat d'adhésion — Marta López"});
+  const list = h("div", {class: "stack", style: "gap:10px"});
+  const targets = h("div");
+  const viewer = makeViewer({onRender: drawZones});
+  const create = h("button", {class: "btn", type: "button", disabled: true}, "Créer et obtenir les liens");
+  const SIG_W = 150, SIG_H = 55, STAMP = 105;
+  function drawSigners() {
+    list.replaceChildren(...signers.map((s, i) => {
+      const inp = (k, ph, type = "text") => { const el = h("input", {type, placeholder: ph, value: s[k], id: `s${i}${k}`}); el.oninput = () => { s[k] = el.value; if (k === "name") drawTargets(); check(); }; return el; };
+      return h("div", {class: "signer"},
+        h("div", {class: "row"}, h("b", {style: "flex:1"}, `Signataire ${i + 1}`), signers.length > 1 ? h("button", {class: "icon-btn", type: "button", "aria-label": "Retirer ce signataire", onclick: () => { signers.splice(i, 1); target = 0; drawSigners(); viewer.redraw(); }}, "×") : null),
+        h("div", {class: "fields"},
+          h("div", {class: "field"}, h("label", {for: `s${i}name`}, "Nom complet"), inp("name", "Prénom Nom")),
+          h("div", {class: "field"}, h("label", {for: `s${i}phone`}, "WhatsApp"), inp("phone", "+34 600 000 000", "tel")),
+          h("div", {class: "field"}, h("label", {for: `s${i}email`}, "Email"), inp("email", "nom@exemple.com", "email")),
+          h("div", {class: "field"}, h("label", {for: `s${i}role`}, "Rôle"), inp("role", "Membre, Coach…"))));
+    }), h("div", {class: "row"}, h("button", {class: "btn ghost small", type: "button", onclick: () => { signers.push({name: "", phone: "", email: "", role: "", placements: []}); drawSigners(); }}, "+ Ajouter un signataire")));
+    drawTargets(); check();
+  }
+  function drawTargets() {
+    targets.replaceChildren(h("div", {class: "field"}, h("span", {class: "lbl"}, "Touche la page pour placer :"),
+      seg([...signers.map((s, i) => [String(i), "Signature " + (s.name || i + 1)]), ["stamp", "Cachet de l'entreprise"]], String(target), v => target = v === "stamp" ? "stamp" : +v)));
+  }
+  function drawZones(v) {
+    v.overlay.replaceChildren();
+    signers.forEach((s, i) => s.placements.filter(z => z.page === v.n).forEach(z => v.overlay.append(h("div", {class: "zone", style: v.boxStyle(z), title: "Touche pour retirer", "data-s": i, "data-z": s.placements.indexOf(z)}, s.name || "Signataire " + (i + 1)))));
+    stamps.filter(z => z.page === v.n).forEach(z => v.overlay.append(h("div", {class: "zone stamp", style: v.boxStyle({...z, h: z.w}), title: "Touche pour retirer", "data-stamp": stamps.indexOf(z)}, "Cachet")));
+  }
+  viewer.overlay.addEventListener("click", e => {
+    const z = e.target.closest(".zone");
+    if (z) { if (z.dataset.stamp != null) stamps.splice(+z.dataset.stamp, 1); else signers[+z.dataset.s].placements.splice(+z.dataset.z, 1); viewer.redraw(); check(); return; }
+    if (!viewer.viewport) return;
+    const [x, y] = viewer.point(e), k = viewer.scale;
+    if (target === "stamp") { const [px, py] = viewer.toPdf(x - STAMP * k / 2, y + STAMP * k / 2); stamps.push({page: viewer.n, x: px, y: py, w: STAMP}); }
+    else { const [px, py] = viewer.toPdf(x - SIG_W * k / 2, y + SIG_H * k / 2); signers[target].placements.push({page: viewer.n, x: px, y: py, w: SIG_W, h: SIG_H}); }
+    viewer.redraw(); check();
+  });
+  function check() { create.disabled = !(buf && titleIn.value.trim() && signers.every(s => s.name.trim() && s.placements.length)); }
+  titleIn.oninput = check;
+  const fileIn = h("input", {type: "file", accept: "application/pdf,.pdf", id: "pdfIn"});
+  fileIn.onchange = async () => {
+    file = fileIn.files[0]; if (!file) return;
+    try { buf = await file.arrayBuffer(); await viewer.load(await openPdf(buf)); if (!titleIn.value) titleIn.value = file.name.replace(/\.pdf$/i, ""); setStatus(st, `${file.name} · ${fmtSize(file.size)}. Place maintenant les signatures${settings.profile.company ? " et le cachet" : ""}.`); check(); }
+    catch { setStatus(st, "Ce fichier n'est pas un PDF lisible.", "err"); }
+  };
+  create.onclick = async () => {
+    create.disabled = true; setStatus(st, "Envoi du document…");
+    try {
+      const r = await api("/requests", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({title: titleIn.value.trim(), fileName: file.name, signers, stamps})});
+      await api(`/requests/${r.id}/original`, {method: "PUT", headers: {"content-type": "application/pdf"}, body: buf});
+      tabs("docs"); viewDetail(r.id);
+    } catch (e) { setStatus(st, e.message, "err"); create.disabled = false; }
+  };
+  app.replaceChildren(h("section", {class: "panel"},
+    h("h2", {}, "Nouvelle demande de signature"),
+    h("label", {class: "drop", for: "pdfIn"}, fileIn, h("b", {}, "Choisis le PDF à faire signer"), h("small", {}, "contrat, adhésion, devis… 20 Mo maximum")),
+    h("div", {class: "field"}, h("label", {for: "title"}, "Titre"), titleIn),
+    h("h3", {}, "Qui doit signer ?"), list,
+    h("h3", {}, "Où signer ?"), targets, viewer.el,
+    h("p", {class: "note"}, "Touche une zone déjà placée pour la retirer. Le cachet est apposé à la finalisation, avec la date du jour."),
+    h("div", {class: "row"}, create), st));
+  drawSigners();
+}
+
+/* ---------- réglages de l'entreprise ---------- */
+function viewSettings() {
+  const p = {...{company: "", taxId: "", address: "", city: "Valencia", country: "ES", email: "", phone: "", color: "#2340c9", stampText: ""}, ...settings.profile};
+  const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const preview = h("canvas", {class: "stamp-preview", width: 300, height: 300});
+  const drawPreview = () => { const c = stampCanvas(p, {logo: logoImg, size: 300}); preview.getContext("2d").clearRect(0, 0, 300, 300); preview.getContext("2d").drawImage(c, 0, 0); };
+  const f = (k, label, ph, type = "text") => { const el = h("input", {type, id: "p_" + k, value: p[k] || "", placeholder: ph || ""}); el.oninput = () => { p[k] = el.value; drawPreview(); }; return h("div", {class: "field"}, h("label", {for: "p_" + k}, label), el); };
+  const save = async () => { try { const r = await api("/settings", {method: "PUT", headers: {"content-type": "application/json"}, body: JSON.stringify(p)}); settings.profile = r.profile; await loadSettings(); setStatus(st, "Enregistré.", "ok"); } catch (e) { setStatus(st, e.message, "err"); } };
+  const logoIn = h("input", {type: "file", accept: "image/png,image/jpeg", id: "logoIn"});
+  logoIn.onchange = async () => { const fl = logoIn.files[0]; if (!fl) return; try { await api("/logo", {method: "PUT", headers: {"content-type": fl.type}, body: await fl.arrayBuffer()}); await loadSettings(); drawPreview(); setStatus(st, "Logo enregistré.", "ok"); } catch (e) { setStatus(st, e.message, "err"); } };
+
+  // sceau
+  const sealSt = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const sealBox = h("div", {class: "stack", style: "gap:10px"});
+  function drawSeal() {
+    const s = settings.seal;
+    const pw1 = h("input", {type: "password", id: "pw1", autocomplete: "new-password"}), pw2 = h("input", {type: "password", id: "pw2", autocomplete: "new-password"});
+    const create = h("button", {class: "btn", type: "button"}, s ? "Remplacer par un nouveau sceau" : "Créer mon sceau");
+    create.onclick = async () => {
+      if (!p.company) return setStatus(sealSt, "Enregistre d'abord le nom de l'entreprise.", "err");
+      if (pw1.value.length < 10) return setStatus(sealSt, "Choisis un mot de passe d'au moins 10 caractères.", "err");
+      if (pw1.value !== pw2.value) return setStatus(sealSt, "Les deux mots de passe sont différents.", "err");
+      create.disabled = true; setStatus(sealSt, "Création des clés… (quelques secondes)");
+      try {
+        const r = await Seal.createSeal({org: p.company, taxId: p.taxId, country: p.country || "ES", email: p.email, password: pw1.value});
+        await api("/seal", {method: "PUT", headers: {"content-type": "application/x-pkcs12", "x-seal-info": encodeURIComponent(JSON.stringify({org: p.company, fingerprint: r.fingerprint, notAfter: r.notAfter}))}, body: r.p12});
+        download(`sceau-${p.company.replace(/\W+/g, "-").toLowerCase()}.p12`, r.p12, "application/x-pkcs12");
+        await loadSettings(); drawSeal(); setStatus(sealSt, "Sceau créé. Une copie de sauvegarde vient d'être téléchargée : range-la en lieu sûr avec le mot de passe.", "ok");
+      } catch (e) { setStatus(sealSt, e.message || "Création impossible.", "err"); create.disabled = false; }
+    };
+    const impFile = h("input", {type: "file", accept: ".p12,.pfx,application/x-pkcs12", id: "impP12"}), impPw = h("input", {type: "password", id: "impPw", autocomplete: "off"});
+    const imp = h("button", {class: "btn ghost", type: "button"}, "Importer ce certificat");
+    imp.onclick = async () => {
+      const fl = impFile.files[0]; if (!fl) return setStatus(sealSt, "Choisis le fichier .p12 ou .pfx.", "err");
+      try { const bytes = new Uint8Array(await fl.arrayBuffer()), info = Seal.sealInfo(bytes, impPw.value);
+        await api("/seal", {method: "PUT", headers: {"content-type": "application/x-pkcs12", "x-seal-info": encodeURIComponent(JSON.stringify(info))}, body: bytes});
+        await loadSettings(); drawSeal(); setStatus(sealSt, `Certificat « ${info.org} » installé.`, "ok");
+      } catch { setStatus(sealSt, "Fichier ou mot de passe incorrect.", "err"); }
+    };
+    sealBox.replaceChildren(
+      s ? h("p", {style: "margin:0"}, h("b", {}, "Sceau actif : "), `${s.org}, valable jusqu'au ${new Date(s.notAfter).toLocaleDateString("fr-FR")}. `, h("span", {class: "hash"}, "Empreinte " + s.fingerprint)) : h("p", {class: "note"}, "Aucun sceau. Sans sceau, les documents sont signés et tracés, mais une modification après coup ne serait pas détectée automatiquement par les lecteurs PDF."),
+      h("details", {open: !s}, h("summary", {style: "cursor:pointer;font-weight:600"}, s ? "Créer un nouveau sceau" : "Créer mon sceau gratuit"),
+        h("div", {class: "stack", style: "gap:10px;margin-top:10px"},
+          h("div", {class: "fields"}, h("div", {class: "field"}, h("label", {for: "pw1"}, "Mot de passe du sceau (10 caractères minimum)"), pw1), h("div", {class: "field"}, h("label", {for: "pw2"}, "Confirme le mot de passe"), pw2)),
+          h("p", {class: "note"}, "Ce mot de passe protège ton sceau et ne quitte jamais ton appareil : le serveur ne le connaît pas. Il te sera demandé à chaque finalisation. Si tu le perds, crée un nouveau sceau ; les documents déjà scellés restent valables."),
+          h("div", {class: "row"}, create))),
+      h("details", {}, h("summary", {style: "cursor:pointer;font-weight:600"}, "Utiliser un certificat officiel (FNMT…)"),
+        h("div", {class: "stack", style: "gap:10px;margin-top:10px"},
+          h("p", {class: "note"}, "Si tu as un certificat de représentant ou de sceau de la FNMT (ou d'un autre prestataire reconnu), importe-le ici : les lecteurs PDF afficheront alors une signature reconnue."),
+          h("div", {class: "fields"}, h("div", {class: "field"}, h("label", {for: "impP12"}, "Fichier .p12 / .pfx"), impFile), h("div", {class: "field"}, h("label", {for: "impPw"}, "Mot de passe du certificat"), impPw)),
+          h("div", {class: "row"}, imp))),
+      sealSt);
+  }
+  app.replaceChildren(
+    h("section", {class: "panel"}, h("h2", {}, "Mon entreprise"),
+      h("p", {style: "margin:0;color:var(--muted)"}, "Ces informations apparaissent sur la page de signature, sur le cachet et dans le certificat de preuve."),
+      h("div", {class: "fields"}, f("company", "Nom de l'entreprise", "ex. Ton Club SL"), f("taxId", "CIF / NIF", "B12345678"), f("address", "Adresse", "Calle…"), f("city", "Ville", "Valencia"), f("email", "Email de contact", "", "email"), f("phone", "Téléphone", "", "tel"), f("stampText", "Texte du cachet sans logo", "VALIDÉ")),
+      h("div", {class: "row"}, h("div", {class: "field"}, h("label", {for: "p_color"}, "Couleur"), (() => { const el = h("input", {type: "color", id: "p_color", value: p.color}); el.oninput = () => { p.color = el.value; drawPreview(); }; return el; })()),
+        h("label", {class: "btn ghost small", for: "logoIn", style: "cursor:pointer"}, logoIn, settings.profile.hasLogo ? "Changer le logo" : "Ajouter le logo"),
+        settings.profile.hasLogo ? h("button", {class: "btn ghost small", type: "button", onclick: async () => { await api("/logo", {method: "DELETE"}); await loadSettings(); drawPreview(); }}, "Retirer le logo") : null),
+      h("div", {class: "row", style: "align-items:center"}, preview, h("p", {class: "note", style: "flex:1;min-width:200px"}, "Aperçu de ton cachet. Il est posé à la finalisation, avec la date du jour, aux endroits choisis pour chaque document.")),
+      h("div", {class: "row"}, h("button", {class: "btn", type: "button", onclick: save}, "Enregistrer")), st),
+    h("section", {class: "panel"}, h("h2", {}, "Sceau anti-modification"), sealBox));
+  drawPreview(); drawSeal();
+}
+
+if (TOKEN) start(); else login();
+</script>
+</body>
+</html>

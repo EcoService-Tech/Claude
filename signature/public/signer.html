@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Signature du document</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Caveat:wght@600&display=swap">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo" id="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-6 5-9 7-9s-1 9 2 9 3-5 5-5 2 3 4 3"/><path d="M3 21h18"/></svg></div>
+    <div class="brand"><h1 id="company">Signature électronique</h1><p id="subtitle">Chargement du document…</p></div>
+  </header>
+  <main id="app" class="stack"></main>
+  <footer>Signature électronique au sens du règlement (UE) n° 910/2014 (eIDAS). La date, l'heure et l'adresse de connexion sont enregistrées par le serveur au moment de la signature, avec l'empreinte du document.</footer>
+</div>
+<script src="/vendor/pdf-lib.min.js"></script>
+<script src="/vendor/pdf.min.js"></script>
+<script src="/common.js"></script>
+<script>
+const token = location.pathname.split("/").filter(Boolean)[1] || "";
+const app = $("#app");
+const CONSENT = "J'ai lu le document en entier et j'accepte de le signer électroniquement. Ma signature a la même valeur d'engagement que ma signature manuscrite.";
+const startedAt = Date.now();
+let info = null, pdfBuf = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch(`/api/s/${token}${path}`, opts);
+  const ct = r.headers.get("content-type") || "";
+  if (!r.ok) throw new Error(ct.includes("json") ? (await r.json()).error : "Erreur de connexion.");
+  return ct.includes("json") ? r.json() : r.arrayBuffer();
+}
+
+function header() {
+  const p = info.profile;
+  if (p.company) { $("#company").textContent = p.company; document.title = "Signer · " + p.company; }
+  if (p.color) document.documentElement.style.setProperty("--accent", p.color);
+  if (p.hasLogo) $("#logo").replaceChildren(h("img", {src: "/api/logo", alt: ""}));
+  $("#subtitle").textContent = info.title;
+}
+
+function finalView() {
+  app.replaceChildren(h("section", {class: "panel done"},
+    h("div", {class: "big-ok"}, "Document signé par tous"),
+    h("p", {style: "margin:0"}, `« ${info.title} » est finalisé et scellé. Télécharge ta copie et garde-la.`),
+    h("button", {class: "btn", type: "button", onclick: async e => { e.target.disabled = true; try { download(info.fileName.replace(/\.pdf$/i, "") + "-signe.pdf", await api("/pdf")); } finally { e.target.disabled = false; } }}, "Télécharger le document signé"),
+    info.finalHash ? h("p", {class: "hash"}, "Empreinte SHA-256 : " + info.finalHash) : null));
+}
+function signedView() {
+  app.replaceChildren(h("section", {class: "panel done"},
+    h("div", {class: "big-ok"}, "Merci, c'est signé"),
+    h("p", {style: "margin:0"}, `Ta signature a été enregistrée le ${fmtDate(info.signer.signedAt)}. Quand tout le monde aura signé, le document final sera disponible à cette même adresse : garde ce lien.`)));
+}
+
+async function signView() {
+  const me = info.signer, zones = me.placements;
+  const seen = new Set();
+  const viewer = makeViewer({onRender: v => {
+    seen.add(v.n);
+    v.overlay.replaceChildren(...zones.filter(z => z.page === v.n).map(z => h("div", {class: "zone mine", style: v.boxStyle(z)}, "Signe ici")));
+    progress();
+  }});
+  const readNote = h("p", {class: "note"});
+  const nameIn = h("input", {type: "text", id: "fullName", value: me.name || "", autocomplete: "name"});
+  const idIn = h("input", {type: "text", id: "idNum", placeholder: "DNI, NIE ou passeport", autocomplete: "off"});
+  const consent = h("input", {type: "checkbox", id: "consent"});
+  let consentAt = null;
+  consent.onchange = () => { consentAt = consent.checked ? new Date().toISOString() : null; ready(); };
+  const pad = signaturePad({nameHint: () => nameIn.value});
+  pad.onchange = ready;
+  const go = h("button", {class: "btn", type: "button", disabled: true}, "Signer le document");
+  const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const form = h("section", {class: "panel"},
+    h("h2", {}, "2. Ta signature"),
+    h("div", {class: "fields"}, h("div", {class: "field"}, h("label", {for: "fullName"}, "Nom complet"), nameIn), h("div", {class: "field"}, h("label", {for: "idNum"}, "Pièce d'identité (conseillé)"), idIn)),
+    pad.el,
+    h("label", {class: "check", for: "consent"}, consent, h("span", {}, CONSENT)),
+    h("div", {class: "row"}, go), st);
+  function progress() {
+    const left = viewer.count - seen.size;
+    readNote.textContent = left > 0 ? `Lis toutes les pages avant de signer : encore ${left} page${left > 1 ? "s" : ""} à voir. Utilise les flèches.` : "Tu as vu toutes les pages. Tu peux signer en bas.";
+    ready();
+  }
+  function ready() { go.disabled = !(viewer.count && seen.size >= viewer.count && nameIn.value.trim() && consent.checked && pad.png); }
+  nameIn.oninput = ready;
+  go.onclick = async () => {
+    go.disabled = true; setStatus(st, "Enregistrement de ta signature…");
+    try {
+      await api("/viewed", {method: "POST", body: JSON.stringify({pages: seen.size, seconds: Math.round((Date.now() - startedAt) / 1000)})}).catch(() => {});
+      const r = await api("/sign", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({
+        name: nameIn.value.trim(), idNumber: idIn.value.trim(), consent: true, consentText: CONSENT, consentAt, method: pad.method, signature: pad.png, documentHash: info.originalHash})});
+      info.signer.signedAt = r.signedAt; signedView();
+    } catch (e) { setStatus(st, e.message || "La signature n'a pas pu être enregistrée.", "err"); go.disabled = false; }
+  };
+  app.replaceChildren(
+    h("section", {class: "panel"},
+      h("h2", {}, `Bonjour ${me.name || ""}`),
+      h("p", {style: "margin:0"}, `${info.profile.company || "On"} te demande de signer « ${info.title} »${me.role ? " en tant que " + me.role.toLowerCase() : ""}. Ça prend une minute.`),
+      h("h2", {}, "1. Lis le document"), readNote, viewer.el,
+      h("div", {class: "row"}, h("button", {class: "btn ghost small", type: "button", onclick: () => download(info.fileName, pdfBuf)}, "Télécharger pour lire"))),
+    form);
+  await viewer.load(await openPdf(pdfBuf));
+  const first = zones[0]?.page; if (first && first !== 1 && viewer.count === 1) await viewer.go(first);
+}
+
+(async () => {
+  try {
+    info = await api("");
+    header();
+    if (info.status === "final") return finalView();
+    if (info.signer.status === "signed") return signedView();
+    pdfBuf = await api("/pdf");
+    const hash = await hex256(pdfBuf);
+    if (hash !== info.originalHash) throw new Error("Le document reçu ne correspond pas à l'original. Recharge la page.");
+    await signView();
+  } catch (e) {
+    $("#subtitle").textContent = "";
+    app.replaceChildren(h("section", {class: "panel"}, h("h2", {}, "Lien indisponible"), h("p", {style: "margin:0"}, e.message || "Ce lien de signature n'existe pas ou a expiré. Demande un nouveau lien à l'expéditeur.")));
+  }
+})();
+</script>
+</body>
+</html>
