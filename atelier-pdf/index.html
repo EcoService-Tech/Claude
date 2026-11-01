@@ -112,7 +112,7 @@ footer{margin-top:32px;color:var(--muted);font-size:.8rem;max-width:70ch}
     <div class="privacy" title="Les fichiers sont traités dans ton navigateur">Fichiers traités sur ton appareil</div>
   </header>
   <main id="app"></main>
-  <footer>Tes fichiers ne quittent pas ton appareil, sauf pour la reconnaissance de texte, qui envoie l'image à Claude. La signature dessinée n'a pas la valeur d'une signature électronique qualifiée (eIDAS).</footer>
+  <footer>Tes fichiers ne quittent jamais ton appareil : tout est traité dans ton navigateur, sans serveur et sans intelligence artificielle externe.</footer>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
@@ -120,6 +120,7 @@ footer{margin-top:32px;color:var(--muted);font-size:.8rem;max-width:70ch}
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script>
 "use strict";
 const {PDFDocument, rgb, degrees, StandardFonts, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup, PDFOptionList} = PDFLib;
@@ -300,14 +301,14 @@ const TOOLS = [
   {group: "Organiser", id: "extraire", icon: "split", name: "Découper", desc: "Extraire des pages ou séparer chaque page.", run: toolSplit},
   {group: "Organiser", id: "compresser", icon: "zip", name: "Compresser", desc: "Réduire le poids pour l'envoyer par mail.", run: toolCompress},
   {group: "Modifier", id: "editer", icon: "edit", name: "Modifier le texte", desc: "Corriger, ajouter, surligner, masquer.", run: toolEdit},
-  {group: "Modifier", id: "signer", icon: "sign", name: "Signer", desc: "Dessiner ou écrire ta signature et la placer.", run: toolSign},
+  {group: "Modifier", id: "signer", icon: "sign", name: "Signer", desc: "Signature électronique avec certificat de preuve.", run: toolSign},
   {group: "Modifier", id: "formulaire", icon: "form", name: "Remplir un formulaire", desc: "Compléter les champs d'un PDF.", run: toolForm},
   {group: "Modifier", id: "filigrane", icon: "stamp", name: "Filigrane et numéros", desc: "Logo, mention « Copie », numéros de page.", run: toolWatermark},
   {group: "Convertir", id: "images", icon: "camera", name: "Photos vers PDF", desc: "Scanner un papier avec ton téléphone.", run: toolImages},
   {group: "Convertir", id: "en-images", icon: "image", name: "PDF vers images", desc: "Chaque page en PNG ou JPG.", run: toolToImages},
   {group: "Convertir", id: "vers-word", icon: "toword", name: "PDF vers Word", desc: "Récupérer le texte dans un .docx.", run: toolToWord},
   {group: "Convertir", id: "depuis-word", icon: "word", name: "Word vers PDF", desc: "Transformer un .docx ou .txt en PDF.", run: toolFromWord},
-  {group: "Convertir", id: "texte-scan", icon: "ocr", name: "Lire un scan", desc: "Reconnaître le texte d'une photo ou d'un scan.", run: toolOcr}
+  {group: "Convertir", id: "texte-scan", icon: "ocr", name: "Lire un scan", desc: "Reconnaître le texte d'une photo, sur ton appareil.", run: toolOcr}
 ];
 
 function home() {
@@ -604,87 +605,211 @@ function toolEdit(body, st) {
 }
 
 /* =========================================================
-   6. Signer
+   6. Signer (signature électronique avec dossier de preuve)
    ========================================================= */
+const hex256 = async buf => [...new Uint8Array(await crypto.subtle.digest("SHA-256", buf))].map(b => b.toString(16).padStart(2, "0")).join("");
+const nowStamp = () => { const d = new Date(); return {iso: d.toISOString(), local: d.toLocaleString("fr-FR", {dateStyle: "long", timeStyle: "medium"}), tz: Intl.DateTimeFormat().resolvedOptions().timeZone || ""}; };
+const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+const CONSENT = "J'ai lu le document en entier et j'accepte de le signer électroniquement. Ma signature a la même valeur d'engagement que ma signature manuscrite.";
+
 function toolSign(body, st) {
-  let src = null, name = "", how = "draw", sigPng = null, sigRatio = 3, width = 160, withDate = true;
+  let src = null, srcHash = "", name = "", width = 160, withDate = true, withProof = true, active = 0;
+  const signers = [];
   const marks = [];
+  const newSigner = () => ({name: "", email: "", doc: "", role: signers.length ? "Signataire " + (signers.length + 1) : "Signataire 1", sigPng: null, sigUrl: "", ratio: 3, consent: null, how: "draw", typed: ""});
+  signers.push(newSigner());
+
+  const tabs = h("div", {class: "seg", role: "group"});
+  const nameIn = h("input", {type: "text", placeholder: "Prénom et nom", autocomplete: "name"});
+  const mailIn = h("input", {type: "text", placeholder: "email@exemple.com", inputmode: "email", autocomplete: "email"});
+  const docIn = h("input", {type: "text", placeholder: "DNI / NIE / passeport (conseillé)"});
+  const roleIn = h("input", {type: "text", placeholder: "ex. Membre, Coach, Gérant"});
+  const consentChk = h("input", {type: "checkbox"});
+  const consentLbl = h("label", {class: "check", style: "align-items:flex-start"}, consentChk, h("span", {}, CONSENT));
   const pad = h("canvas", {class: "sigpad", "aria-label": "Zone de signature"});
-  const typed = h("input", {type: "text", placeholder: "Ton nom", value: ""});
-  const typedBox = fieldBox("Écris ton nom", typed); typedBox.hidden = true;
-  const padBox = h("div", {class: "field"}, pad, h("div", {class: "row"}, h("button", {class: "btn ghost small", type: "button", onclick: () => clearPad()}, "Effacer")));
+  const typed = h("input", {type: "text", placeholder: "Écris ton nom"});
+  const typedBox = fieldBox("Signature écrite", typed);
+  const padBox = h("div", {class: "field"}, pad, h("div", {class: "row"}, h("button", {class: "btn ghost small", type: "button", onclick: () => { clearPad(); S().sigPng = null; }}, "Effacer")));
+  const howSeg = h("div");
+  const widthIn = h("input", {type: "range", min: 60, max: 320, value: width}); widthIn.oninput = () => width = +widthIn.value;
+  const dateChk = h("input", {type: "checkbox", checked: true}); dateChk.onchange = () => withDate = dateChk.checked;
+  const proofChk = h("input", {type: "checkbox", checked: true}); proofChk.onchange = () => withProof = proofChk.checked;
   const go = h("button", {class: "btn", type: "button", disabled: true}, "Créer le PDF signé");
   const out = h("div"), list = h("div", {class: "ops"});
-  const widthIn = h("input", {type: "range", min: 60, max: 320, value: width}); widthIn.oninput = () => { width = +widthIn.value; };
-  const dateChk = h("input", {type: "checkbox", checked: true}); dateChk.onchange = () => withDate = dateChk.checked;
   const viewer = makeViewer({onRender: drawMarks});
+  const S = () => signers[active];
+
+  function showSigner() {
+    const s = S();
+    tabs.replaceChildren(...signers.map((x, i) => h("button", {type: "button", "aria-pressed": i === active, onclick: () => { active = i; showSigner(); }}, x.name || x.role)),
+      h("button", {type: "button", onclick: () => { signers.push(newSigner()); active = signers.length - 1; showSigner(); }}, "+ Ajouter"));
+    nameIn.value = s.name; mailIn.value = s.email; docIn.value = s.doc; roleIn.value = s.role; consentChk.checked = !!s.consent; typed.value = s.typed;
+    howSeg.replaceChildren(seg([["draw", "Dessiner"], ["type", "Écrire"]], s.how, v => { s.how = v; s.sigPng = null; padBox.hidden = v !== "draw"; typedBox.hidden = v !== "type"; if (v === "draw") requestAnimationFrame(clearPad); else renderTyped(); }));
+    padBox.hidden = s.how !== "draw"; typedBox.hidden = s.how !== "type";
+    requestAnimationFrame(() => { clearPad(); if (s.sigUrl && s.how === "draw") { const im = new Image(); im.onload = () => { const r = pad.getBoundingClientRect(), k = Math.min((r.width - 20) / im.width, (r.height - 20) / im.height, 1); ctx.drawImage(im, 10, 10, im.width * k, im.height * k); }; im.src = s.sigUrl; } });
+  }
+  nameIn.oninput = () => { S().name = nameIn.value.trim(); [...tabs.children][active].textContent = S().name || S().role; if (S().how === "type" && !S().typed) renderTyped(); };
+  mailIn.oninput = () => S().email = mailIn.value.trim();
+  docIn.oninput = () => S().doc = docIn.value.trim();
+  roleIn.oninput = () => S().role = roleIn.value.trim();
+  consentChk.onchange = () => { S().consent = consentChk.checked ? nowStamp() : null; refresh(); };
+
   // signature pad
   let ctx, drawing = false, inked = false;
-  function sizePad() { const r = pad.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; pad.width = r.width * dpr; pad.height = r.height * dpr; ctx = pad.getContext("2d"); ctx.scale(dpr, dpr); ctx.lineWidth = 2.4; ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = "#0d1b6e"; inked = false; }
-  function clearPad() { sizePad(); sigPng = null; }
-  pad.addEventListener("pointerdown", e => { if (!ctx) sizePad(); drawing = true; pad.setPointerCapture(e.pointerId); const r = pad.getBoundingClientRect(); ctx.beginPath(); ctx.moveTo(e.clientX - r.left, e.clientY - r.top); });
+  function clearPad() { const r = pad.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; pad.width = Math.max(1, r.width * dpr); pad.height = Math.max(1, r.height * dpr); ctx = pad.getContext("2d"); ctx.scale(dpr, dpr); ctx.lineWidth = 2.4; ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = "#0d1b6e"; inked = false; }
+  pad.addEventListener("pointerdown", e => { if (!ctx) clearPad(); drawing = true; pad.setPointerCapture(e.pointerId); const r = pad.getBoundingClientRect(); ctx.beginPath(); ctx.moveTo(e.clientX - r.left, e.clientY - r.top); });
   pad.addEventListener("pointermove", e => { if (!drawing) return; const r = pad.getBoundingClientRect(); ctx.lineTo(e.clientX - r.left, e.clientY - r.top); ctx.stroke(); inked = true; });
   pad.addEventListener("pointerup", async () => { drawing = false; if (inked) await capture(pad); });
   async function capture(c) {
-    // trim transparent edges
     const g = c.getContext("2d"), {width: W, height: H} = c, d = g.getImageData(0, 0, W, H).data;
     let x0 = W, y0 = H, x1 = 0, y1 = 0;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
     if (x1 <= x0) return;
     const t = document.createElement("canvas"); t.width = x1 - x0 + 8; t.height = y1 - y0 + 8;
     t.getContext("2d").drawImage(c, x0 - 4, y0 - 4, t.width, t.height, 0, 0, t.width, t.height);
-    sigPng = await canvasBytes(t); sigRatio = t.width / t.height; sigUrl = t.toDataURL();
+    const s = S(); s.sigPng = await canvasBytes(t); s.ratio = t.width / t.height; s.sigUrl = t.toDataURL();
     setStatus(st, "Signature prête. Touche la page à l'endroit où la placer.");
   }
-  let sigUrl = "";
-  typed.addEventListener("input", async () => {
-    await document.fonts.load('64px "Caveat"');
-    const c = document.createElement("canvas"); c.width = 900; c.height = 220;
-    const g = c.getContext("2d"); g.font = '600 120px "Caveat", cursive'; g.fillStyle = "#0d1b6e"; g.textBaseline = "middle"; g.fillText(typed.value, 20, 115);
-    if (typed.value.trim()) await capture(c); else sigPng = null;
-  });
-  const modeSeg = seg([["draw", "Dessiner"], ["type", "Écrire"]], how, v => { how = v; padBox.hidden = v !== "draw"; typedBox.hidden = v !== "type"; sigPng = null; if (v === "draw") requestAnimationFrame(clearPad); else typed.dispatchEvent(new Event("input")); });
-  // placing
+  async function renderTyped() {
+    const s = S(); s.typed = typed.value || s.name; if (!typed.value && s.name) typed.value = s.name;
+    if (!s.typed.trim()) { s.sigPng = null; return; }
+    await document.fonts.load('64px "Caveat"').catch(() => {});
+    const c = document.createElement("canvas"); c.width = 1000; c.height = 220;
+    const g = c.getContext("2d"); g.font = '600 120px "Caveat", cursive'; g.fillStyle = "#0d1b6e"; g.textBaseline = "middle"; g.fillText(s.typed, 20, 115);
+    await capture(c);
+  }
+  typed.addEventListener("input", renderTyped);
+
+  // placing on the page
   viewer.overlay.addEventListener("pointerdown", e => {
     if (!viewer.viewport) return;
-    if (!sigPng) return setStatus(st, "Dessine ou écris d'abord ta signature.", "err");
-    const [x, y] = viewer.point(e), s = viewer.scale;
-    const [px, py] = viewer.toPdf(x - width * s / 2, y + (width / sigRatio) * s / 2);
-    marks.push({page: viewer.n, x: px, y: py, w: width, h: width / sigRatio, png: sigPng, url: sigUrl, date: withDate});
+    const s = S();
+    if (!s.sigPng) return setStatus(st, "Dessine ou écris d'abord la signature de " + (s.name || s.role) + ".", "err");
+    const [x, y] = viewer.point(e), k = viewer.scale;
+    const [px, py] = viewer.toPdf(x - width * k / 2, y + (width / s.ratio) * k / 2);
+    marks.push({signer: active, page: viewer.n, x: px, y: py, w: width, h: width / s.ratio, png: s.sigPng, url: s.sigUrl, date: withDate, placed: nowStamp()});
     refresh();
   });
   function drawMarks(v) {
     v.overlay.replaceChildren();
     for (const m of marks) if (m.page === v.n) {
-      const [vx, vy] = v.toView(m.x, m.y + m.h), s = v.scale;
-      v.overlay.append(h("div", {class: "op", style: `left:${vx}px;top:${vy}px;width:${m.w * s}px;height:${m.h * s}px`}, h("img", {src: m.url, alt: ""})));
-      if (m.date) v.overlay.append(h("div", {class: "op", style: `left:${vx}px;top:${vy + m.h * s + 2}px;font-size:${9 * s}px`}, "Le " + new Date().toLocaleDateString("fr-FR")));
+      const [vx, vy] = v.toView(m.x, m.y + m.h), k = v.scale;
+      v.overlay.append(h("div", {class: "op", style: `left:${vx}px;top:${vy}px;width:${m.w * k}px;height:${m.h * k}px`}, h("img", {src: m.url, alt: ""})));
+      if (m.date) v.overlay.append(h("div", {class: "op", style: `left:${vx}px;top:${vy + m.h * k + 2}px;font-size:${8 * k}px`}, `${signers[m.signer].name || signers[m.signer].role} · ${new Date().toLocaleDateString("fr-FR")}`));
     }
   }
+  function problems() {
+    const used = [...new Set(marks.map(m => m.signer))], errs = [];
+    if (!marks.length) errs.push("Place au moins une signature sur le document.");
+    for (const i of used) {
+      const s = signers[i], who = s.name || s.role;
+      if (withProof && !s.name) errs.push(`Indique le nom de ${who}.`);
+      if (withProof && !s.email) errs.push(`Indique l'email de ${who}.`);
+      if (withProof && !s.consent) errs.push(`${who} doit cocher la case de consentement.`);
+    }
+    return errs;
+  }
   function refresh() {
-    list.replaceChildren(...marks.map((m, i) => h("div", {}, h("span", {}, `Signature page ${m.page}${m.date ? " + date" : ""}`), h("button", {class: "icon-btn", type: "button", "aria-label": "Retirer", onclick: () => { marks.splice(i, 1); refresh(); }}, "×"))));
+    list.replaceChildren(...marks.map((m, i) => h("div", {}, h("span", {}, `${signers[m.signer].name || signers[m.signer].role} · page ${m.page}${m.date ? " + date" : ""}`),
+      h("button", {class: "icon-btn", type: "button", "aria-label": "Retirer", onclick: () => { marks.splice(i, 1); refresh(); }}, "×"))));
     go.disabled = !marks.length; viewer.redraw();
   }
+
+  async function certificatePage(doc, docId, finalLines) {
+    const F = await doc.embedFont(StandardFonts.Helvetica), B = await doc.embedFont(StandardFonts.HelveticaBold), M = await doc.embedFont(StandardFonts.Courier);
+    const W = 595.28, H = 841.89, L = 50, maxW = W - 2 * L;
+    let p = doc.addPage([W, H]), y = H - 60;
+    const ink = rgb(.08, .1, .15), mut = rgb(.38, .42, .5);
+    const line = (t, {f = F, size = 10, color = ink, gap = 4} = {}) => {
+      const words = safe(t).split(" "); let cur = "";
+      const flush = () => { if (y < 70) { p = doc.addPage([W, H]); y = H - 60; } p.drawText(cur, {x: L, y, size, font: f, color}); y -= size + gap; cur = ""; };
+      for (const w of words) { const tt = cur ? cur + " " + w : w; if (f.widthOfTextAtSize(tt, size) > maxW && cur) { flush(); cur = w; } else cur = tt; }
+      if (cur) flush();
+    };
+    p.drawRectangle({x: 0, y: H - 34, width: W, height: 34, color: rgb(.137, .251, .788)});
+    p.drawText("CERTIFICAT DE SIGNATURE ELECTRONIQUE", {x: L, y: H - 22, size: 11, font: B, color: rgb(1, 1, 1)});
+    y = H - 70;
+    line("Document : " + name + ".pdf", {f: B, size: 12, gap: 8});
+    line("Identifiant du dossier : " + docId, {f: M, size: 9});
+    line("Empreinte SHA-256 du document original (avant signature) :", {size: 9, color: mut, gap: 2});
+    line(srcHash, {f: M, size: 8.5, gap: 10});
+    for (const fl of finalLines) line(fl, {size: 9, color: mut});
+    y -= 6;
+    const used = [...new Set(marks.map(m => m.signer))];
+    used.forEach((i, n) => {
+      const s = signers[i], ms = marks.filter(m => m.signer === i);
+      if (y < 200) { p = doc.addPage([W, H]); y = H - 60; }
+      p.drawLine({start: {x: L, y: y + 6}, end: {x: W - L, y: y + 6}, thickness: .5, color: rgb(.8, .82, .87)});
+      y -= 10;
+      line(`Signataire ${n + 1} : ${s.name}${s.role ? " (" + s.role + ")" : ""}`, {f: B, size: 11, gap: 6});
+      line("Email : " + (s.email || "non renseigné"));
+      line("Pièce d'identité : " + (s.doc || "non renseignée"));
+      line(`Consentement donné le : ${s.consent ? s.consent.local + " (" + s.consent.tz + ") · " + s.consent.iso : "non recueilli"}`);
+      line(`Signature apposée le : ${ms[0].placed.local} (${ms[0].placed.tz}) · ${ms[0].placed.iso}`);
+      line(`Pages signées : ${[...new Set(ms.map(m => m.page))].join(", ")}`);
+      line("Mode : signature " + (s.how === "draw" ? "dessinée à la main sur l'écran" : "écrite au clavier") + ", sur l'appareil présenté au signataire.");
+      line("Texte de consentement accepté : « " + CONSENT + " »", {size: 9, color: mut, gap: 4});
+      const im = ms[0].embedded; if (im) { const hh = 46, ww = hh * im.width / im.height; if (y - hh < 70) { p = doc.addPage([W, H]); y = H - 60; } p.drawImage(im, {x: L, y: y - hh + 6, width: Math.min(ww, 220), height: Math.min(ww, 220) / ww * hh}); y -= hh + 8; }
+    });
+    y -= 8;
+    line("Appareil utilisé : " + navigator.userAgent.slice(0, 160), {size: 7.5, color: mut, gap: 3});
+    line("Signature électronique simple au sens de l'article 3.10 du règlement (UE) n° 910/2014 (eIDAS). Selon l'article 25.1, elle ne peut pas être privée d'effet juridique ni de recevabilité en justice au seul motif qu'elle est électronique. Pour vérifier que le document n'a pas été modifié, recalculez l'empreinte SHA-256 du fichier signé et comparez-la à celle conservée dans le fichier de preuve (.json) et dans l'email d'envoi.", {size: 8, color: mut, gap: 3});
+  }
+
   go.onclick = async () => {
+    const errs = problems(); if (errs.length) return setStatus(st, errs[0], "err");
+    go.disabled = true; out.replaceChildren();
     try {
       const doc = await PDFDocument.load(src, {ignoreEncryption: true}), font = await doc.embedFont(StandardFonts.Helvetica);
-      const cache = new Map();
+      const docId = newId(), cache = new Map(), done = nowStamp();
       for (const m of marks) {
         if (!cache.has(m.png)) cache.set(m.png, await doc.embedPng(m.png));
+        m.embedded = cache.get(m.png);
         const p = doc.getPage(m.page - 1);
-        p.drawImage(cache.get(m.png), {x: m.x, y: m.y, width: m.w, height: m.h});
-        if (m.date) p.drawText("Le " + new Date().toLocaleDateString("fr-FR"), {x: m.x, y: m.y - 11, size: 9, font, color: rgb(.15, .15, .2)});
+        p.drawImage(m.embedded, {x: m.x, y: m.y, width: m.w, height: m.h});
+        if (m.date) p.drawText(safe(`${signers[m.signer].name || ""} · ${new Date().toLocaleDateString("fr-FR")}`), {x: m.x, y: m.y - 10, size: 7.5, font, color: rgb(.15, .15, .2)});
       }
-      out.replaceChildren(resultBox(name + "-signe.pdf", await doc.save(), st)); setStatus(st, "Document signé.", "ok");
-    } catch { setStatus(st, "La signature a échoué.", "err"); }
+      if (withProof) {
+        const pages = doc.getPageCount();
+        doc.getPages().forEach((p, i) => p.drawText(safe(`Dossier ${docId.slice(0, 8)} · page ${i + 1}/${pages + 1}`), {x: 36, y: 10, size: 6.5, font, color: rgb(.5, .5, .55)}));
+        await certificatePage(doc, docId, [`Dossier finalisé le : ${done.local} (${done.tz}) · ${done.iso}`]);
+        doc.setSubject("Signé électroniquement · dossier " + docId);
+        doc.setKeywords(["signature", "sha256:" + srcHash, "dossier:" + docId]);
+      }
+      doc.setModificationDate(new Date());
+      const bytes = await doc.save();
+      const finalHash = await hex256(bytes.slice().buffer);
+      const proof = {dossier: docId, document: name + ".pdf", empreinte_originale_sha256: srcHash, empreinte_signee_sha256: finalHash, finalise_le: done,
+        signataires: [...new Set(marks.map(m => m.signer))].map(i => { const s = signers[i]; return {nom: s.name, role: s.role, email: s.email, piece_identite: s.doc, consentement: s.consent, texte_consentement: CONSENT, mode: s.how, signatures: marks.filter(m => m.signer === i).map(m => ({page: m.page, le: m.placed}))}; }),
+        appareil: navigator.userAgent};
+      const emails = proof.signataires.map(s => s.email).filter(Boolean);
+      const mailBody = `Bonjour,\n\nVoici le document « ${name}.pdf » signé électroniquement.\nDossier : ${docId}\nEmpreinte SHA-256 du fichier signé : ${finalHash}\n\nConservez ce message : il sert de preuve de la date d'envoi.`;
+      const copyMail = h("button", {class: "btn ghost small", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(mailBody); setStatus(st, "Texte du mail copié.", "ok"); } catch { setStatus(st, "Copie impossible ici : recopie l'empreinte affichée.", "err"); } }}, "Copier le texte du mail");
+      out.replaceChildren(
+        resultBox(name + "-signe.pdf", bytes, st),
+        withProof ? h("div", {class: "result"}, h("button", {class: "btn ghost", type: "button", onclick: () => saveFile(name + "-preuve.json", JSON.stringify(proof, null, 2), st)}, "Enregistrer le fichier de preuve"), copyMail) : null,
+        withProof ? h("p", {class: "note"}, `Dernière étape, importante : envoie tout de suite le PDF signé par email à ${emails.join(", ") || "chaque signataire"}, avec le texte copié. L'email horodaté par un tiers renforce ta preuve. Garde le PDF, le fichier de preuve et l'email.`) : null,
+        withProof ? h("p", {class: "sz", style: "font-family:var(--mono);font-size:.75rem;word-break:break-all;color:var(--muted);margin:0"}, "SHA-256 du PDF signé : " + finalHash) : null);
+      setStatus(st, "Document signé" + (withProof ? " avec certificat de preuve." : "."), "ok");
+    } catch (e) { setStatus(st, "La signature a échoué.", "err"); }
+    go.disabled = false;
   };
+
   body.append(
-    dropZone({onFiles: async fs => { try { src = await readBuf(fs[0]); name = baseName(fs[0].name); marks.length = 0; refresh(); await viewer.load(await openJs(src)); } catch { setStatus(st, "Impossible de lire ce fichier.", "err"); } }}),
-    modeSeg, padBox, typedBox,
-    h("div", {class: "row"}, fieldBox("Taille de la signature", widthIn), h("label", {class: "check"}, dateChk, "Ajouter la date")),
-    h("p", {class: "note"}, "Touche la page pour poser la signature. Pour un contrat qui doit avoir une valeur légale forte, utilise un service de signature électronique qualifiée."),
-    viewer.el, list, h("div", {class: "row"}, go), out);
-  requestAnimationFrame(sizePad);
+    dropZone({onFiles: async fs => { try { src = await readBuf(fs[0]); srcHash = await hex256(src.slice(0)); name = baseName(fs[0].name); marks.length = 0; refresh(); await viewer.load(await openJs(src)); setStatus(st, ""); } catch { setStatus(st, "Impossible de lire ce fichier.", "err"); } }}),
+    h("div", {class: "field"}, h("label", {}, "Signataires"), tabs),
+    h("div", {class: "fields"}, fieldBox("Nom complet", nameIn), fieldBox("Email", mailIn), fieldBox("Pièce d'identité", docIn), fieldBox("Rôle", roleIn)),
+    howSeg, padBox, typedBox, consentLbl,
+    h("div", {class: "row"}, fieldBox("Taille de la signature", widthIn), h("label", {class: "check"}, dateChk, "Nom et date sous la signature"), h("label", {class: "check"}, proofChk, "Ajouter le certificat de preuve")),
+    h("p", {class: "note"}, "Fais remplir, cocher et signer chaque personne elle-même, sur ton téléphone ou ta tablette. Puis touche la page pour poser sa signature. Pour ajouter quelqu'un, utilise « + Ajouter »."),
+    viewer.el, list, h("div", {class: "row"}, go), out,
+    h("details", {}, h("summary", {style: "cursor:pointer;font-weight:600"}, "Quelle valeur légale ?"),
+      h("div", {class: "field", style: "gap:8px;margin-top:8px;max-width:70ch"},
+        h("p", {style: "margin:0"}, "Cet outil produit une signature électronique simple, renforcée par un dossier de preuve : identité, consentement daté, empreinte du document, certificat ajouté au PDF. Elle est valable en Europe (règlement eIDAS) et suffit pour la plupart des contrats courants : adhésion, coaching, prestation, devis. En cas de litige, c'est à toi de prouver qui a signé. D'où l'importance de l'email d'envoi et du fichier de preuve."),
+        h("p", {style: "margin:0"}, "Pour TA propre signature avec la valeur la plus forte (équivalente à la signature manuscrite), l'Espagne propose une solution officielle et gratuite : le certificat numérique de la FNMT ou ton DNIe, avec l'application AutoFirma du gouvernement. Signe d'abord ici, puis passe le PDF dans AutoFirma pour y ajouter ta signature certifiée."),
+        h("p", {style: "margin:0"}, "Certains actes exigent plus qu'une signature simple (par exemple un acte notarié ou certains baux). En cas de doute sur un contrat précis, demande à un avocat.")))
+  );
+  showSigner();
 }
 
 /* =========================================================
@@ -988,45 +1113,55 @@ function toolFromWord(body, st) {
 }
 
 /* =========================================================
-   13. Lire un scan (reconnaissance de texte par Claude)
+   13. Lire un scan (reconnaissance de texte sur l'appareil)
    ========================================================= */
-let sampleP = null;
-const getSample = () => sampleP ??= (window.claude?.use ? window.claude.use("sample").catch(() => null) : Promise.resolve(null));
-function toolOcr(body, st) {
-  let file = null, text = "";
-  const go = h("button", {class: "btn", type: "button", disabled: true}, "Lire le texte");
-  const area = h("textarea", {id: "ocrText", placeholder: "Le texte reconnu apparaîtra ici."});
-  const acts = h("div", {class: "row"}); acts.hidden = true;
-  const avail = h("p", {class: "note"}, "Le texte est lu par Claude : l'image de chaque page lui est envoyée. Relis le résultat avant de l'utiliser.");
-  getSample().then(async s => {
-    const lim = s ? await s.limits().catch(() => null) : null;
-    if (!lim?.images) { avail.textContent = "La reconnaissance de texte n'est pas disponible dans cette vue. Ouvre la page dans claude.ai, connecté à ton compte."; go.dataset.off = "1"; go.disabled = true; }
+let ocrWorker = null, ocrLang = "";
+async function getOcr(lang, onProgress) {
+  if (ocrWorker && ocrLang === lang) return ocrWorker;
+  if (ocrWorker) { await ocrWorker.terminate(); ocrWorker = null; }
+  const base = new URL("ocr/", location.href).href;
+  ocrWorker = await Tesseract.createWorker(lang.split("+"), 1, {
+    workerPath: base + "worker.js", corePath: base + "core", langPath: base + "lang",
+    workerBlobURL: false, cacheMethod: "none",
+    logger: m => onProgress?.(m)
   });
+  ocrLang = lang;
+  return ocrWorker;
+}
+function toolOcr(body, st) {
+  let file = null, lang = "fra+spa";
+  const go = h("button", {class: "btn", type: "button", disabled: true}, "Lire le texte");
+  const area = h("textarea", {id: "ocrText", placeholder: "Le texte reconnu apparaîtra ici. Tu peux le corriger avant de l'enregistrer."});
+  const acts = h("div", {class: "row"}); acts.hidden = true;
   async function pagesOf(f) {
     if (f.type.startsWith("image/")) {
-      const bmp = await createImageBitmap(f); const k = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+      const bmp = await createImageBitmap(f, {imageOrientation: "from-image"}); const k = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
       const c = document.createElement("canvas"); c.width = bmp.width * k; c.height = bmp.height * k; c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-      return [await canvasBlob(c, "image/jpeg", .85)];
+      return [c];
     }
     const js = await openJs(await readBuf(f)), out = [];
-    for (let n = 1; n <= Math.min(js.numPages, 20); n++) { const {canvas} = await renderToCanvas(js, n, 1.8); out.push(await canvasBlob(canvas, "image/jpeg", .85)); canvas.width = 0; }
+    for (let n = 1; n <= Math.min(js.numPages, 30); n++) { const {canvas} = await renderToCanvas(js, n, 2.2); out.push(canvas); }
     return out;
   }
   go.onclick = async () => {
-    const s = await getSample(); if (!s) return;
     go.disabled = true; area.value = ""; acts.hidden = true;
     try {
-      const pages = await pagesOf(file), parts = [];
-      for (const [i, img] of pages.entries()) {
-        setStatus(st, `Lecture de la page ${i + 1} / ${pages.length}…`);
-        const r = await s("Transcris exactement tout le texte visible sur cette image de document, dans l'ordre de lecture. Garde les retours à la ligne entre paragraphes. N'ajoute aucun commentaire, aucune introduction, aucune balise. Si une partie est illisible, écris [illisible].", {images: [img], modelTier: "default", cache: false});
-        parts.push(r.text.trim()); area.value = parts.join("\n\n— — —\n\n");
+      setStatus(st, "Préparation du moteur de lecture…");
+      const pages = await pagesOf(file); let cur = 1;
+      const w = await getOcr(lang, m => {
+        if (m.status === "recognizing text") setStatus(st, `Lecture de la page ${cur} / ${pages.length} : ${Math.round(m.progress * 100)} %`);
+        else if (/load|initializ/.test(m.status)) setStatus(st, "Préparation du moteur de lecture…");
+      });
+      const parts = [];
+      for (const [i, c] of pages.entries()) {
+        cur = i + 1;
+        const {data} = await w.recognize(c);
+        parts.push(data.text.replace(/\n{3,}/g, "\n\n").trim()); area.value = parts.join("\n\n— — —\n\n");
+        c.width = 0;
       }
-      text = area.value; acts.hidden = false;
-      setStatus(st, pages.length > 1 ? `${pages.length} pages lues.` : "Texte lu.", "ok");
-    } catch (e) {
-      setStatus(st, e?.code === "not_granted" ? "Accès à Claude refusé pour cette page." : e?.code === "rate_limited" ? "Trop de demandes. Patiente une minute puis relance." : "La lecture a échoué.", "err");
-    }
+      acts.hidden = false;
+      setStatus(st, (pages.length > 1 ? `${pages.length} pages lues` : "Texte lu") + ". Relis-le : la reconnaissance peut se tromper sur les photos floues.", "ok");
+    } catch (e) { setStatus(st, "La lecture a échoué. Essaie avec une photo plus nette, bien éclairée et prise bien à plat.", "err"); }
     go.disabled = false;
   };
   const copyBtn = h("button", {class: "btn ghost small", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(area.value); setStatus(st, "Texte copié.", "ok"); } catch { area.select(); setStatus(st, "Sélectionné : copie-le avec ton appareil."); } }}, "Copier");
@@ -1035,8 +1170,13 @@ function toolOcr(body, st) {
     h("button", {class: "btn ghost small", type: "button", onclick: async () => saveFile(baseName(file.name) + "-texte.pdf", await blocksToPdf(area.value.split(/\n/).map(t => t.trim() === "— — —" ? {pageBreak: true} : {text: t})), st)}, "Enregistrer en PDF"),
     h("button", {class: "btn ghost small", type: "button", onclick: () => saveFile(baseName(file.name) + "-texte.txt", area.value, st)}, "Enregistrer en TXT"),
     copyBtn);
-  body.append(dropZone({accept: "image/*,application/pdf,.pdf", label: "Choisis une photo ou un PDF scanné", hint: "20 pages au maximum par lecture", onFiles: fs => { file = fs[0]; if (!go.dataset.off) go.disabled = false; setStatus(st, file.name); }}),
-    avail, h("div", {class: "row"}, go), area, acts);
+  body.append(
+    h("div", {class: "row"},
+      dropZone({accept: "image/*", capture: "environment", label: "Prendre une photo", hint: "ouvre l'appareil photo sur téléphone", sample: false, onFiles: fs => { file = fs[0]; go.disabled = false; setStatus(st, file.name); }}),
+      dropZone({accept: "image/*,application/pdf,.pdf", label: "Choisir une image ou un PDF", hint: "30 pages au maximum", onFiles: fs => { file = fs[0]; go.disabled = false; setStatus(st, file.name); }})),
+    fieldBox("Langue du document", seg([["fra+spa", "Français + espagnol"], ["fra", "Français"], ["spa", "Espagnol"], ["eng", "Anglais"]], lang, v => lang = v)),
+    h("p", {class: "note"}, "Tout se passe sur ton appareil, sans envoyer le document à personne. La première lecture prend quelques secondes de plus, le temps de charger le moteur."),
+    h("div", {class: "row"}, go), area, acts);
 }
 
 /* ---------- start ---------- */
