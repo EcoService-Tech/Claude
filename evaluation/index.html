@@ -94,7 +94,8 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding:0 16px 32px}
     <label><input type="checkbox" data-multi="objectif" value="Me muscler"><span>Me muscler</span></label>
     <label><input type="checkbox" data-multi="objectif" value="Plus d'énergie / être en forme"><span>Plus d'énergie</span></label>
     <label><input type="checkbox" data-multi="objectif" value="Autre"><span>Autre</span></label>
-   </div></div>
+   </div>
+   <div id="autreBox" hidden style="margin-top:12px"><input type="text" id="autre" name="objectif_autre" placeholder="Précise ton objectif…"></div></div>
 
   <div class="q"><span class="lbl">Ton niveau actuel</span>
    <div class="choices" data-required="Niveau">
@@ -149,6 +150,11 @@ const f = document.getElementById('f'), err = document.getElementById('err'), bt
 f.querySelectorAll('input[name="sante"]').forEach(r => r.addEventListener('change', () => {
   document.getElementById('santeNote').hidden = r.value !== 'Oui' || !r.checked;
 }));
+const autreCb = f.querySelector('input[data-multi="objectif"][value="Autre"]');
+autreCb.addEventListener('change', () => {
+  document.getElementById('autreBox').hidden = !autreCb.checked;
+  if (autreCb.checked) document.getElementById('autre').focus(); else document.getElementById('autre').value = '';
+});
 function fail(msg, el){ err.textContent = msg; err.style.display = 'block'; if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); }
 f.addEventListener('submit', async e => {
   e.preventDefault(); err.style.display = 'none';
@@ -161,6 +167,7 @@ f.addEventListener('submit', async e => {
   for (const g of f.querySelectorAll('[data-required]')) {
     if (!g.querySelector('input:checked')) return fail('Merci de répondre à : ' + g.dataset.required, g);
   }
+  if (autreCb.checked && !document.getElementById('autre').value.trim()) return fail('Merci de préciser ton objectif « Autre ».', document.getElementById('autre'));
   if (!document.getElementById('rgpd').checked) return fail("Merci d'accepter d'être recontacté pour envoyer ton évaluation.", document.getElementById('rgpd'));
   for (const grp of ['formule','objectif']) {
     f.querySelector(`input[type=hidden][name="${grp}"]`).value =
