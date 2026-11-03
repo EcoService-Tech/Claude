@@ -61,70 +61,71 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding:0 16px 32px}
 
 <main>
  <div class="wrap">
- <form id="f" novalidate>
-  <input type="text" name="_honey" class="hp" tabindex="-1" autocomplete="off">
+ <form id="f" name="evaluation" method="POST" data-netlify="true" netlify-honeypot="bot-field" novalidate>
+  <input type="hidden" name="form-name" value="evaluation">
+  <p class="hp"><label>Ne pas remplir <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
 
   <div class="q"><label for="prenom">Ton prénom</label>
-   <input type="text" id="prenom" name="Prénom" required autocomplete="given-name"></div>
+   <input type="text" id="prenom" name="prenom" required autocomplete="given-name"></div>
 
   <div class="q"><label for="email">Ton email</label>
-   <input type="email" id="email" name="Email" required autocomplete="email" inputmode="email">
+   <input type="email" id="email" name="email" required autocomplete="email" inputmode="email">
    <p class="note">C'est par ici qu'on te répond.</p></div>
 
   <div class="q"><label for="tel">Ton téléphone / WhatsApp <span class="opt">(facultatif)</span></label>
-   <input type="tel" id="tel" name="Téléphone" autocomplete="tel" inputmode="tel" placeholder="+33 6 …"></div>
+   <input type="tel" id="tel" name="telephone" autocomplete="tel" inputmode="tel" placeholder="+33 6 …"></div>
 
   <div class="q"><label for="pays">Où vis-tu ? <span class="opt">(pays, ville)</span></label>
-   <input type="text" id="pays" name="Lieu" required placeholder="Ex. France, Lyon"></div>
+   <input type="text" id="pays" name="lieu" required placeholder="Ex. France, Lyon"></div>
 
   <div class="q"><span class="lbl">Quelle formule t'intéresse ?</span>
    <div class="choices" data-required="Formule">
-    <label><input type="radio" name="Formule" value="En ligne"><span>En ligne</span></label>
-    <label><input type="radio" name="Formule" value="En présentiel"><span>En présentiel</span></label>
-    <label><input type="radio" name="Formule" value="Je ne sais pas encore"><span>Je ne sais pas encore</span></label>
+    <label><input type="radio" name="formule" value="En ligne"><span>En ligne</span></label>
+    <label><input type="radio" name="formule" value="En présentiel"><span>En présentiel</span></label>
+    <label><input type="radio" name="formule" value="Je ne sais pas encore"><span>Je ne sais pas encore</span></label>
    </div></div>
 
   <div class="q"><span class="lbl">Ton objectif principal</span>
    <div class="choices" data-required="Objectif">
-    <label><input type="radio" name="Objectif" value="Reprendre le sport"><span>Reprendre le sport</span></label>
-    <label><input type="radio" name="Objectif" value="Perdre du poids"><span>Perdre du poids</span></label>
-    <label><input type="radio" name="Objectif" value="Me muscler"><span>Me muscler</span></label>
-    <label><input type="radio" name="Objectif" value="Plus d'énergie / être en forme"><span>Plus d'énergie</span></label>
-    <label><input type="radio" name="Objectif" value="Autre"><span>Autre</span></label>
+    <label><input type="radio" name="objectif" value="Reprendre le sport"><span>Reprendre le sport</span></label>
+    <label><input type="radio" name="objectif" value="Perdre du poids"><span>Perdre du poids</span></label>
+    <label><input type="radio" name="objectif" value="Me muscler"><span>Me muscler</span></label>
+    <label><input type="radio" name="objectif" value="Plus d'énergie / être en forme"><span>Plus d'énergie</span></label>
+    <label><input type="radio" name="objectif" value="Autre"><span>Autre</span></label>
    </div></div>
 
   <div class="q"><span class="lbl">Ton niveau actuel</span>
    <div class="choices" data-required="Niveau">
-    <label><input type="radio" name="Niveau" value="Débutant / reprise"><span>Débutant / reprise</span></label>
-    <label><input type="radio" name="Niveau" value="Intermédiaire"><span>Intermédiaire</span></label>
-    <label><input type="radio" name="Niveau" value="Avancé"><span>Avancé</span></label>
+    <label><input type="radio" name="niveau" value="Débutant / reprise"><span>Débutant / reprise</span></label>
+    <label><input type="radio" name="niveau" value="Intermédiaire"><span>Intermédiaire</span></label>
+    <label><input type="radio" name="niveau" value="Avancé"><span>Avancé</span></label>
    </div></div>
 
   <div class="q"><span class="lbl">Combien de séances par semaine c'est réaliste pour toi ?</span>
    <div class="choices" data-required="Séances par semaine">
-    <label><input type="radio" name="Séances par semaine" value="1 à 2"><span>1 à 2</span></label>
-    <label><input type="radio" name="Séances par semaine" value="3"><span>3</span></label>
-    <label><input type="radio" name="Séances par semaine" value="4 ou plus"><span>4 ou plus</span></label>
+    <label><input type="radio" name="seances" value="1 à 2"><span>1 à 2</span></label>
+    <label><input type="radio" name="seances" value="3"><span>3</span></label>
+    <label><input type="radio" name="seances" value="4 ou plus"><span>4 ou plus</span></label>
    </div></div>
 
   <div class="q"><span class="lbl">Ton matériel</span>
    <div class="choices" data-required="Matériel">
-    <label><input type="radio" name="Matériel" value="Rien"><span>Rien</span></label>
-    <label><input type="radio" name="Matériel" value="Quelques accessoires"><span>Quelques accessoires</span></label>
-    <label><input type="radio" name="Matériel" value="Salle de sport"><span>Salle de sport</span></label>
+    <label><input type="radio" name="materiel" value="Rien"><span>Rien</span></label>
+    <label><input type="radio" name="materiel" value="Quelques accessoires"><span>Quelques accessoires</span></label>
+    <label><input type="radio" name="materiel" value="Salle de sport"><span>Salle de sport</span></label>
    </div></div>
 
   <div class="q"><span class="lbl">As-tu une douleur, une blessure ou un problème de santé à signaler ?</span>
    <div class="choices" data-required="Santé">
-    <label><input type="radio" name="Santé" value="Non"><span>Non</span></label>
-    <label><input type="radio" name="Santé" value="Oui"><span>Oui</span></label>
+    <label><input type="radio" name="sante" value="Non"><span>Non</span></label>
+    <label><input type="radio" name="sante" value="Oui"><span>Oui</span></label>
    </div>
    <p class="note" id="santeNote" hidden>Merci. Avant de commencer, demande l'avis de ton médecin. Tu peux préciser ci-dessous.</p></div>
 
   <div class="q"><label for="msg">Quelque chose à ajouter ? <span class="opt">(facultatif)</span></label>
-   <textarea id="msg" name="Message" placeholder="Tes contraintes, tes questions…"></textarea></div>
+   <textarea id="msg" name="message" placeholder="Tes contraintes, tes questions…"></textarea></div>
 
-  <div class="q"><label class="consent"><input type="checkbox" id="rgpd" name="Consentement" value="Oui" required>
+  <div class="q"><label class="consent"><input type="checkbox" id="rgpd" name="consentement" value="Oui" required>
    <span>J'accepte que Rajola utilise ces informations uniquement pour me recontacter au sujet de mon évaluation. Elles ne sont ni vendues ni partagées. Je peux demander leur suppression à tout moment par email à rajola.coaching@gmail.com.</span></label></div>
 
   <button type="submit" id="btn">Envoyer mon évaluation</button>
@@ -142,9 +143,8 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding:0 16px 32px}
 <footer>Rajola · Instagram @rajola.coaching · TikTok @rajolacoaching</footer>
 
 <script>
-const ENDPOINT = "https://formsubmit.co/ajax/rajola.coaching@gmail.com";
 const f = document.getElementById('f'), err = document.getElementById('err'), btn = document.getElementById('btn');
-f.querySelectorAll('input[name="Santé"]').forEach(r => r.addEventListener('change', () => {
+f.querySelectorAll('input[name="sante"]').forEach(r => r.addEventListener('change', () => {
   document.getElementById('santeNote').hidden = r.value !== 'Oui' || !r.checked;
 }));
 function fail(msg, el){ err.textContent = msg; err.style.display = 'block'; if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); }
@@ -160,15 +160,10 @@ f.addEventListener('submit', async e => {
     if (!g.querySelector('input:checked')) return fail('Merci de répondre à : ' + g.dataset.required, g);
   }
   if (!document.getElementById('rgpd').checked) return fail("Merci d'accepter d'être recontacté pour envoyer ton évaluation.", document.getElementById('rgpd'));
-  const data = Object.fromEntries(new FormData(f).entries());
-  data._subject = 'Nouvelle évaluation Rajola : ' + data['Prénom'];
-  data._replyto = data['Email'];
-  data._template = 'table';
   btn.disabled = true; btn.textContent = 'Envoi…';
   try {
-    const r = await fetch(ENDPOINT, {method:'POST', headers:{'Content-Type':'application/json', 'Accept':'application/json'}, body: JSON.stringify(data)});
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || String(j.success) === 'false') throw new Error(j.message || 'Erreur');
+    const r = await fetch('/', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(f)).toString()});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     f.style.display = 'none'; document.getElementById('done').style.display = 'block'; window.scrollTo({top:0, behavior:'smooth'});
   } catch (x) {
     btn.disabled = false; btn.textContent = 'Envoyer mon évaluation';
