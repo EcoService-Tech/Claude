@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Évaluation gratuite · Rajola</title>
+<meta name="description" content="Évaluation gratuite Rajola : dis-nous ton objectif, ton niveau et tes disponibilités, on te propose un programme adapté.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--orange:#D66834;--orange-d:#B9541F;--cream:#F7EFE5;--ink:#2B1D14;--muted:#7A6152;--line:#E6D7C8;--card:#FFFBF6;--err:#B3261E}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--cream);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+.tiles{background-image:linear-gradient(45deg,rgba(214,104,52,.07) 25%,transparent 25%,transparent 75%,rgba(214,104,52,.07) 75%),linear-gradient(45deg,rgba(214,104,52,.07) 25%,transparent 25%,transparent 75%,rgba(214,104,52,.07) 75%);background-size:48px 48px;background-position:0 0,24px 24px}
+header{background:var(--orange);color:#FFF7EE;padding:28px 16px 36px}
+.wrap{max-width:560px;margin:0 auto}
+.brand{font-weight:900;letter-spacing:5px;font-size:15px;color:#FFE2CC}
+h1{font-size:34px;line-height:1.08;font-weight:900;letter-spacing:-.5px;margin:18px 0 10px}
+.lead{font-size:17px;color:#FFEBDD}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.pill{background:rgba(255,255,255,.16);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600}
+main{padding:20px 16px 48px}
+form{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px 18px;margin-top:-22px;box-shadow:0 8px 30px rgba(43,29,20,.06)}
+.q{margin-bottom:24px}
+.q>label,.q>.lbl{display:block;font-weight:800;font-size:16px;margin-bottom:10px}
+.opt{font-weight:500;color:var(--muted);font-size:13px}
+input[type=text],input[type=email],input[type=tel],textarea{width:100%;font:inherit;font-size:16px;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
+textarea{min-height:90px;resize:vertical}
+input:focus,textarea:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px rgba(214,104,52,.15)}
+.choices{display:flex;flex-wrap:wrap;gap:8px}
+.choices label{position:relative;cursor:pointer}
+.choices input{position:absolute;opacity:0;pointer-events:none}
+.choices span{display:block;padding:10px 14px;border:1.5px solid var(--line);border-radius:12px;background:#fff;font-weight:600;font-size:15px}
+.choices input:checked+span{background:var(--orange);border-color:var(--orange);color:#fff}
+.choices input:focus-visible+span{box-shadow:0 0 0 3px rgba(214,104,52,.3)}
+.note{font-size:13px;color:var(--muted);margin-top:8px}
+.consent{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--muted)}
+.consent input{margin-top:3px;width:18px;height:18px;accent-color:var(--orange);flex:none}
+button{width:100%;margin-top:8px;font:inherit;font-size:17px;font-weight:800;color:#fff;background:var(--orange);border:0;border-radius:999px;padding:16px;cursor:pointer}
+button:hover{background:var(--orange-d)}
+button[disabled]{opacity:.6;cursor:wait}
+.error{color:var(--err);font-size:14px;font-weight:600;margin-top:12px;display:none}
+.hp{position:absolute;left:-9999px}
+.done{display:none;text-align:center;padding:40px 10px}
+.done .big{font-size:52px}
+.done h2{font-size:26px;font-weight:900;margin:10px 0 8px}
+.done p{color:var(--muted)}
+footer{text-align:center;font-size:12px;color:var(--muted);padding:0 16px 32px}
+@media (min-width:600px){h1{font-size:42px}}
+</style>
+</head>
+<body>
+<header class="tiles">
+ <div class="wrap">
+  <div class="brand">RAJOLA</div>
+  <h1>Ton évaluation gratuite</h1>
+  <p class="lead">2 minutes pour nous dire où tu en es. On te propose ensuite la formule la plus adaptée à ton objectif et à ton emploi du temps.</p>
+  <div class="pills"><span class="pill">Gratuit</span><span class="pill">Sans engagement</span><span class="pill">FR · ES · EN</span></div>
+ </div>
+</header>
+
+<main>
+ <div class="wrap">
+ <form id="f" name="evaluation" method="POST" data-netlify="true" netlify-honeypot="bot-field" novalidate>
+  <input type="hidden" name="form-name" value="evaluation">
+  <p class="hp"><label>Ne pas remplir <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
+
+  <div class="q"><label for="prenom">Ton prénom</label>
+   <input type="text" id="prenom" name="prenom" required autocomplete="given-name"></div>
+
+  <div class="q"><label for="email">Ton email</label>
+   <input type="email" id="email" name="email" required autocomplete="email" inputmode="email">
+   <p class="note">C'est par ici qu'on te répond.</p></div>
+
+  <div class="q"><label for="tel">Ton téléphone / WhatsApp <span class="opt">(facultatif)</span></label>
+   <input type="tel" id="tel" name="telephone" autocomplete="tel" inputmode="tel" placeholder="+33 6 …"></div>
+
+  <div class="q"><label for="pays">Où vis-tu ? <span class="opt">(pays, ville)</span></label>
+   <input type="text" id="pays" name="lieu" required placeholder="Ex. France, Lyon"></div>
+
+  <div class="q"><span class="lbl">Quelle formule t'intéresse ?</span>
+   <div class="choices" data-required="Formule">
+    <label><input type="radio" name="formule" value="En ligne"><span>En ligne</span></label>
+    <label><input type="radio" name="formule" value="En présentiel"><span>En présentiel</span></label>
+    <label><input type="radio" name="formule" value="Je ne sais pas encore"><span>Je ne sais pas encore</span></label>
+   </div></div>
+
+  <div class="q"><span class="lbl">Ton objectif principal</span>
+   <div class="choices" data-required="Objectif">
+    <label><input type="radio" name="objectif" value="Reprendre le sport"><span>Reprendre le sport</span></label>
+    <label><input type="radio" name="objectif" value="Perdre du poids"><span>Perdre du poids</span></label>
+    <label><input type="radio" name="objectif" value="Me muscler"><span>Me muscler</span></label>
+    <label><input type="radio" name="objectif" value="Plus d'énergie / être en forme"><span>Plus d'énergie</span></label>
+    <label><input type="radio" name="objectif" value="Autre"><span>Autre</span></label>
+   </div></div>
+
+  <div class="q"><span class="lbl">Ton niveau actuel</span>
+   <div class="choices" data-required="Niveau">
+    <label><input type="radio" name="niveau" value="Débutant / reprise"><span>Débutant / reprise</span></label>
+    <label><input type="radio" name="niveau" value="Intermédiaire"><span>Intermédiaire</span></label>
+    <label><input type="radio" name="niveau" value="Avancé"><span>Avancé</span></label>
+   </div></div>
+
+  <div class="q"><span class="lbl">Combien de séances par semaine c'est réaliste pour toi ?</span>
+   <div class="choices" data-required="Séances par semaine">
+    <label><input type="radio" name="seances" value="1 à 2"><span>1 à 2</span></label>
+    <label><input type="radio" name="seances" value="3"><span>3</span></label>
+    <label><input type="radio" name="seances" value="4 ou plus"><span>4 ou plus</span></label>
+   </div></div>
+
+  <div class="q"><span class="lbl">Ton matériel</span>
+   <div class="choices" data-required="Matériel">
+    <label><input type="radio" name="materiel" value="Rien"><span>Rien</span></label>
+    <label><input type="radio" name="materiel" value="Quelques accessoires"><span>Quelques accessoires</span></label>
+    <label><input type="radio" name="materiel" value="Salle de sport"><span>Salle de sport</span></label>
+   </div></div>
+
+  <div class="q"><span class="lbl">As-tu une douleur, une blessure ou un problème de santé à signaler ?</span>
+   <div class="choices" data-required="Santé">
+    <label><input type="radio" name="sante" value="Non"><span>Non</span></label>
+    <label><input type="radio" name="sante" value="Oui"><span>Oui</span></label>
+   </div>
+   <p class="note" id="santeNote" hidden>Merci. Avant de commencer, demande l'avis de ton médecin. Tu peux préciser ci-dessous.</p></div>
+
+  <div class="q"><label for="msg">Quelque chose à ajouter ? <span class="opt">(facultatif)</span></label>
+   <textarea id="msg" name="message" placeholder="Tes contraintes, tes questions…"></textarea></div>
+
+  <div class="q"><label class="consent"><input type="checkbox" id="rgpd" name="consentement" value="Oui" required>
+   <span>J'accepte que Rajola utilise ces informations uniquement pour me recontacter au sujet de mon évaluation. Elles ne sont ni vendues ni partagées. Je peux demander leur suppression à tout moment par email à rajola.coaching@gmail.com.</span></label></div>
+
+  <button type="submit" id="btn">Envoyer mon évaluation</button>
+  <p class="error" id="err"></p>
+ </form>
+
+ <div class="done" id="done">
+  <div class="big">🧡</div>
+  <h2>Merci, c'est envoyé !</h2>
+  <p>On a bien reçu ton évaluation. On te répond par email très vite. Pense à vérifier tes spams.</p>
+ </div>
+ </div>
+</main>
+
+<footer>Rajola · Instagram @rajola.coaching · TikTok @rajolacoaching</footer>
+
+<script>
+const f = document.getElementById('f'), err = document.getElementById('err'), btn = document.getElementById('btn');
+f.querySelectorAll('input[name="sante"]').forEach(r => r.addEventListener('change', () => {
+  document.getElementById('santeNote').hidden = r.value !== 'Oui' || !r.checked;
+}));
+function fail(msg, el){ err.textContent = msg; err.style.display = 'block'; if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); }
+f.addEventListener('submit', async e => {
+  e.preventDefault(); err.style.display = 'none';
+  for (const id of ['prenom','email','pays']) {
+    const el = document.getElementById(id);
+    if (!el.value.trim()) return fail('Merci de remplir tous les champs obligatoires.', el);
+  }
+  const email = document.getElementById('email');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) return fail("Ton adresse email semble incorrecte.", email);
+  for (const g of f.querySelectorAll('[data-required]')) {
+    if (!g.querySelector('input:checked')) return fail('Merci de répondre à : ' + g.dataset.required, g);
+  }
+  if (!document.getElementById('rgpd').checked) return fail("Merci d'accepter d'être recontacté pour envoyer ton évaluation.", document.getElementById('rgpd'));
+  btn.disabled = true; btn.textContent = 'Envoi…';
+  try {
+    const r = await fetch('/', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(f)).toString()});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    f.style.display = 'none'; document.getElementById('done').style.display = 'block'; window.scrollTo({top:0, behavior:'smooth'});
+  } catch (x) {
+    btn.disabled = false; btn.textContent = 'Envoyer mon évaluation';
+    fail("L'envoi n'a pas fonctionné. Réessaie dans un instant, ou écris-nous à rajola.coaching@gmail.com.");
+  }
+});
+</script>
+</body>
+</html>
