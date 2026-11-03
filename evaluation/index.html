@@ -78,20 +78,22 @@ footer{text-align:center;font-size:12px;color:var(--muted);padding:0 16px 32px}
   <div class="q"><label for="pays">Où vis-tu ? <span class="opt">(pays, ville)</span></label>
    <input type="text" id="pays" name="lieu" required placeholder="Ex. France, Lyon"></div>
 
-  <div class="q"><span class="lbl">Quelle formule t'intéresse ?</span>
+  <div class="q"><span class="lbl">Quelle formule t'intéresse ? <span class="opt">(plusieurs choix possibles)</span></span>
+   <input type="hidden" name="formule">
    <div class="choices" data-required="Formule">
-    <label><input type="radio" name="formule" value="En ligne"><span>En ligne</span></label>
-    <label><input type="radio" name="formule" value="En présentiel"><span>En présentiel</span></label>
-    <label><input type="radio" name="formule" value="Je ne sais pas encore"><span>Je ne sais pas encore</span></label>
+    <label><input type="checkbox" data-multi="formule" value="En ligne"><span>En ligne</span></label>
+    <label><input type="checkbox" data-multi="formule" value="En présentiel"><span>En présentiel</span></label>
+    <label><input type="checkbox" data-multi="formule" value="Je ne sais pas encore"><span>Je ne sais pas encore</span></label>
    </div></div>
 
-  <div class="q"><span class="lbl">Ton objectif principal</span>
+  <div class="q"><span class="lbl">Tes objectifs <span class="opt">(plusieurs choix possibles)</span></span>
+   <input type="hidden" name="objectif">
    <div class="choices" data-required="Objectif">
-    <label><input type="radio" name="objectif" value="Reprendre le sport"><span>Reprendre le sport</span></label>
-    <label><input type="radio" name="objectif" value="Perdre du poids"><span>Perdre du poids</span></label>
-    <label><input type="radio" name="objectif" value="Me muscler"><span>Me muscler</span></label>
-    <label><input type="radio" name="objectif" value="Plus d'énergie / être en forme"><span>Plus d'énergie</span></label>
-    <label><input type="radio" name="objectif" value="Autre"><span>Autre</span></label>
+    <label><input type="checkbox" data-multi="objectif" value="Reprendre le sport"><span>Reprendre le sport</span></label>
+    <label><input type="checkbox" data-multi="objectif" value="Perdre du poids"><span>Perdre du poids</span></label>
+    <label><input type="checkbox" data-multi="objectif" value="Me muscler"><span>Me muscler</span></label>
+    <label><input type="checkbox" data-multi="objectif" value="Plus d'énergie / être en forme"><span>Plus d'énergie</span></label>
+    <label><input type="checkbox" data-multi="objectif" value="Autre"><span>Autre</span></label>
    </div></div>
 
   <div class="q"><span class="lbl">Ton niveau actuel</span>
@@ -160,6 +162,10 @@ f.addEventListener('submit', async e => {
     if (!g.querySelector('input:checked')) return fail('Merci de répondre à : ' + g.dataset.required, g);
   }
   if (!document.getElementById('rgpd').checked) return fail("Merci d'accepter d'être recontacté pour envoyer ton évaluation.", document.getElementById('rgpd'));
+  for (const grp of ['formule','objectif']) {
+    f.querySelector(`input[type=hidden][name="${grp}"]`).value =
+      [...f.querySelectorAll(`input[data-multi="${grp}"]:checked`)].map(i => i.value).join(', ');
+  }
   btn.disabled = true; btn.textContent = 'Envoi…';
   try {
     const r = await fetch('/', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(f)).toString()});
