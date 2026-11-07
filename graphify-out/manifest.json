@@ -1,0 +1,278 @@
+{
+  ".claude/hooks/install-graphify.sh": {
+    "mtime": 1794047543.7216973,
+    "seen": 1794048112.3257203,
+    "ast_hash": "7f5a7da92eeb2328c3e2ad4306643f56",
+    "semantic_hash": ""
+  },
+  ".claude/settings.json": {
+    "mtime": 1794047543.7216973,
+    "seen": 1794048112.3257291,
+    "ast_hash": "ffe3007e48fe2ae90cb61c12e7ec48d5",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-brand/sweep.py": {
+    "mtime": 1794047543.7230341,
+    "seen": 1794048112.3257318,
+    "ast_hash": "6e72239d135e70b85f5eb029560645e7",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-design/contrast.py": {
+    "mtime": 1794047543.723333,
+    "seen": 1794048112.3257334,
+    "ast_hash": "be1cc9f80abcff530e3047e43cc7418b",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-diff/imgdiff.py": {
+    "mtime": 1794047543.723421,
+    "seen": 1794048112.3257353,
+    "ast_hash": "89423d275a22901d45d1dded2bbf0a89",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-diff/parity.py": {
+    "mtime": 1794047543.723421,
+    "seen": 1794048112.325737,
+    "ast_hash": "b038abcd7358f9267f243cf25e337f79",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-entrepreneur/reviews.py": {
+    "mtime": 1794047543.723908,
+    "seen": 1794048112.3257384,
+    "ast_hash": "30484811d165ea8e8f26ea27b468e258",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-entrepreneur/themes.json": {
+    "mtime": 1794047543.723908,
+    "seen": 1794048112.32574,
+    "ast_hash": "2f131b47a08b6f829a3a7b9b310c0d89",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-launch/listing.example.json": {
+    "mtime": 1794047543.7240574,
+    "seen": 1794048112.3257413,
+    "ast_hash": "7f333f8243827641e47a0afaebf858dc",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-launch/listing.py": {
+    "mtime": 1794047543.7240574,
+    "seen": 1794048112.325743,
+    "ast_hash": "af4d4a7b06701afb767de7ef763ddda8",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-test/e2e.example.spec.ts": {
+    "mtime": 1794047543.724237,
+    "seen": 1794048112.3257442,
+    "ast_hash": "1a6d12fef3cbe97dfa1b0dc42c3a8881",
+    "semantic_hash": ""
+  },
+  ".github/workflows/deploy-signature.yml": {
+    "mtime": 1794047543.724303,
+    "seen": 1794048112.328318,
+    "ast_hash": "2e2ee4f95a59bb47216ed7166a01f72f",
+    "semantic_hash": ""
+  },
+  "atelier-pdf/ocr/core/tesseract-core-lstm.wasm.js": {
+    "mtime": 1794047543.7736866,
+    "seen": 1794048112.3283231,
+    "ast_hash": "486dab5655805bd39d7f98f104d09885",
+    "semantic_hash": ""
+  },
+  "atelier-pdf/ocr/core/tesseract-core-simd-lstm.wasm.js": {
+    "mtime": 1794047543.8416865,
+    "seen": 1794048112.3283248,
+    "ast_hash": "ca8abab53ef47a8422004081fb942a39",
+    "semantic_hash": ""
+  },
+  "atelier-pdf/ocr/worker.js": {
+    "mtime": 1794047543.8816864,
+    "seen": 1794048112.3283267,
+    "ast_hash": "8189b4bfdb614ca812a68c8f512b5e09",
+    "semantic_hash": ""
+  },
+  "atelier-pdf/ocr/worker.min.js": {
+    "mtime": 1794047543.8816864,
+    "seen": 1794048112.328328,
+    "ast_hash": "65249fe45d712ea365c37080f19904a2",
+    "semantic_hash": ""
+  },
+  "signature/client/seal.js": {
+    "mtime": 1794047543.8851917,
+    "seen": 1794048112.3283298,
+    "ast_hash": "52f5d2a8262d10a85330f01c4f3573b1",
+    "semantic_hash": ""
+  },
+  "signature/package.json": {
+    "mtime": 1794047543.8851917,
+    "seen": 1794048112.3283312,
+    "ast_hash": "c4abf3bc271359b2026529be4159507e",
+    "semantic_hash": ""
+  },
+  "signature/public/common.js": {
+    "mtime": 1794047543.8864548,
+    "seen": 1794048112.3283322,
+    "ast_hash": "038394f02e43794d2d00955d0c5febad",
+    "semantic_hash": ""
+  },
+  "signature/scripts/buffer-shim.js": {
+    "mtime": 1794047543.8864548,
+    "seen": 1794048112.3283336,
+    "ast_hash": "cfbdcb229305fcf548e26a5ae04a0e4a",
+    "semantic_hash": ""
+  },
+  "signature/scripts/build.mjs": {
+    "mtime": 1794047543.886818,
+    "seen": 1794048112.3283346,
+    "ast_hash": "736d7cb9739c1496d8b1d2554943d070",
+    "semantic_hash": ""
+  },
+  "signature/scripts/deploy.sh": {
+    "mtime": 1794047543.886818,
+    "seen": 1794048112.3283358,
+    "ast_hash": "5afd8e863811ddf98b82d71e4abb4a8c",
+    "semantic_hash": ""
+  },
+  "signature/src/worker.js": {
+    "mtime": 1794047543.886818,
+    "seen": 1794048112.3283381,
+    "ast_hash": "3ef723baf0fcd21175f5803485394d9b",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-architect/SKILL.md": {
+    "mtime": 1794047543.7224925,
+    "seen": 1794048112.3283389,
+    "ast_hash": "68b9b40ecc837f79cd8a1f9f55bb69e9",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-architect/architecture.md": {
+    "mtime": 1794047543.7229068,
+    "seen": 1794048112.32834,
+    "ast_hash": "0da9e8d3bb2bcfaaca00da1d7652b3f8",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-backend/SKILL.md": {
+    "mtime": 1794047543.7229068,
+    "seen": 1794048112.328341,
+    "ast_hash": "6cf582652afdfa7a4d93be9c0b678acc",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-brand/SKILL.md": {
+    "mtime": 1794047543.7229068,
+    "seen": 1794048112.328342,
+    "ast_hash": "52f8859b2bd72803f0f22f6504ceb5d2",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-build/SKILL.md": {
+    "mtime": 1794047543.7230341,
+    "seen": 1794048112.3283432,
+    "ast_hash": "5ff1211352611a1b0ca4261bbf802914",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-deploy/SKILL.md": {
+    "mtime": 1794047543.7230341,
+    "seen": 1794048112.328344,
+    "ast_hash": "68ca163f75008916d771db003e9e9d2f",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-deploy/preflight.md": {
+    "mtime": 1794047543.7231479,
+    "seen": 1794048112.3283453,
+    "ast_hash": "e08376a3e4b2137083d9cac67e5213d8",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-design/SKILL.md": {
+    "mtime": 1794047543.7231479,
+    "seen": 1794048112.328346,
+    "ast_hash": "6cb2089c8fef9f8ff7cfdb437beb4335",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-diff/SKILL.md": {
+    "mtime": 1794047543.723333,
+    "seen": 1794048112.328347,
+    "ast_hash": "4388136945068abb2403b78f646f1ff4",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-entrepreneur/SKILL.md": {
+    "mtime": 1794047543.723421,
+    "seen": 1794048112.3283482,
+    "ast_hash": "f8991e2948128c6b7747c5a54984c763",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-launch/SKILL.md": {
+    "mtime": 1794047543.723908,
+    "seen": 1794048112.328349,
+    "ast_hash": "45df2bb5bc5cea98a442026a8ff9f948",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-recon/SKILL.md": {
+    "mtime": 1794047543.7240574,
+    "seen": 1794048112.3283503,
+    "ast_hash": "6d9392e82e61935f37ac1bb95ef909c5",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-recon/recon-map.md": {
+    "mtime": 1794047543.7241743,
+    "seen": 1794048112.3283513,
+    "ast_hash": "d23e672474a29ec1ea49ec43ddfff8b5",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-test/SKILL.md": {
+    "mtime": 1794047543.7241743,
+    "seen": 1794048112.3283522,
+    "ast_hash": "c9a62a0d332c47e75f43f0b30a4a8af1",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-test/bug-report.md": {
+    "mtime": 1794047543.724237,
+    "seen": 1794048112.3283532,
+    "ast_hash": "96a2f82bee687b61cdcab4cae30f3b74",
+    "semantic_hash": ""
+  },
+  ".claude/skills/replica-test/test-plan.md": {
+    "mtime": 1794047543.724237,
+    "seen": 1794048112.3283544,
+    "ast_hash": "63d7dea8bd03011a3cd8b62c78e0c762",
+    "semantic_hash": ""
+  },
+  "atelier-pdf/index.html": {
+    "mtime": 1794047543.724303,
+    "seen": 1794048112.3283558,
+    "ast_hash": "2dab64f920626617002ac4c145f87e95",
+    "semantic_hash": ""
+  },
+  "evaluation/index.html": {
+    "mtime": 1794047543.8816864,
+    "seen": 1794048112.328357,
+    "ast_hash": "b96bc3f4395fcf8f56682c8966f14a56",
+    "semantic_hash": ""
+  },
+  "signature/README.md": {
+    "mtime": 1794047543.8851917,
+    "seen": 1794048112.328358,
+    "ast_hash": "184ff927dd1a674cf6e2437bab227b41",
+    "semantic_hash": ""
+  },
+  "signature/public/admin.html": {
+    "mtime": 1794047543.8851917,
+    "seen": 1794048112.3283594,
+    "ast_hash": "ddd7726a2cf34d5c0b1fb1429669227c",
+    "semantic_hash": ""
+  },
+  "signature/public/index.html": {
+    "mtime": 1794047543.8864548,
+    "seen": 1794048112.3283641,
+    "ast_hash": "3d24b906f8e1b74b4ede91958c73d3ba",
+    "semantic_hash": ""
+  },
+  "signature/public/signer.html": {
+    "mtime": 1794047543.8864548,
+    "seen": 1794048112.328365,
+    "ast_hash": "fd573654c32267339289fbf36a9fcae6",
+    "semantic_hash": ""
+  },
+  "signature/package-lock.json": {
+    "mtime": 1794047543.8851917,
+    "seen": 1794048112.3283663,
+    "ast_hash": "7761cdd8054407604febe3703ebc3b29",
+    "semantic_hash": ""
+  }
+}
