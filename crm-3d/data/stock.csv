@@ -1,0 +1,36 @@
+id,ref,nom,categorie,rayon,niveau,place,quantite,seuil,prix_achat,prix_vente,fournisseur
+s01,FH-1032,Filtre à huile Bosch P7032,Filtration,A,1,1,14,6,4.20,9.90,Bosch
+s02,FH-2109,Filtre à huile Mann W712/95,Filtration,A,1,2,4,6,5.10,11.50,Mann-Filter
+s03,FA-3311,Filtre à air Mann C27009,Filtration,A,1,3,9,4,7.80,16.90,Mann-Filter
+s04,FA-3420,Filtre à air Purflux A1385,Filtration,A,1,4,0,3,6.90,15.50,Purflux
+s05,FC-5010,Filtre habitacle charbon actif,Filtration,A,2,1,11,5,8.40,19.90,Bosch
+s06,FG-6122,Filtre à gazole Bosch N2109,Filtration,A,2,2,3,4,12.30,26.00,Bosch
+s07,FG-6130,Filtre à essence Mahle KL 583,Filtration,A,2,3,6,3,9.60,21.00,Mahle
+s08,JT-0815,Joint de vidange M14 (boîte de 50),Entretien,A,3,1,7,2,6.00,0.50,Elring
+s09,CR-1120,Courroie accessoires Gates 6PK1070,Entretien,A,3,2,5,2,14.50,32.00,Gates
+s10,KD-2200,Kit distribution Dayco + pompe à eau,Entretien,A,3,3,1,2,118.00,215.00,Dayco
+s11,PL-4410,Plaquettes AV Brembo P85 020,Freinage,B,1,1,8,4,24.50,52.00,Brembo
+s12,PL-4415,Plaquettes AR Brembo P85 073,Freinage,B,1,2,2,4,21.80,46.00,Brembo
+s13,DQ-5101,Disques AV ventilés 280 mm (paire),Freinage,B,1,3,4,2,48.00,98.00,Brembo
+s14,DQ-5140,Disques AV ventilés 312 mm (paire),Freinage,B,1,4,0,2,62.00,128.00,Brembo
+s15,LF-6001,Liquide de frein DOT 4 (1 L),Freinage,B,2,1,18,6,5.40,12.90,Bosch
+s16,MA-6110,Mâchoires de frein AR,Freinage,B,2,2,3,2,27.00,58.00,TRW
+s17,FL-6200,Flexible de frein AV,Freinage,B,2,3,6,2,9.20,21.00,TRW
+s18,AM-7010,Amortisseurs AV Monroe (paire),Liaison au sol,B,3,1,2,2,96.00,189.00,Monroe
+s19,RT-7120,Rotule de direction,Liaison au sol,B,3,2,5,2,16.50,36.00,TRW
+s20,HM-8530,Huile 5W30 C3 (bidon 5 L),Huiles,C,1,1,22,8,24.00,49.00,Total
+s21,HM-8540,Huile 5W40 (bidon 5 L),Huiles,C,1,2,7,8,22.50,45.00,Total
+s22,HM-8000,Huile 0W20 (bidon 5 L),Huiles,C,1,3,0,4,31.00,62.00,Castrol
+s23,LR-9100,Liquide de refroidissement G12 (5 L),Fluides,C,2,1,9,4,11.00,24.00,Total
+s24,LG-9200,Lave-glace été (5 L),Fluides,C,2,2,15,6,3.20,7.90,Krafft
+s25,AD-9300,AdBlue (10 L),Fluides,C,2,3,3,4,9.80,19.90,Total
+s26,GR-9400,Graisse multi-usage (cartouche),Fluides,C,3,1,6,2,5.60,0.00,Krafft
+s27,NT-9500,Nettoyant freins (aérosol),Fluides,C,3,2,24,10,2.90,0.00,Krafft
+s28,BT-1060,Batterie Varta 60 Ah,Électricité,D,1,1,3,2,72.00,129.00,Varta
+s29,BT-1074,Batterie Varta 74 Ah,Électricité,D,1,2,0,2,84.00,149.00,Varta
+s30,BT-1095,Batterie AGM 95 Ah Start&Stop,Électricité,D,1,3,1,1,168.00,269.00,Varta
+s31,AP-2007,Ampoule H7 12 V (lot de 2),Électricité,D,2,1,16,6,6.50,14.90,Osram
+s32,BG-2100,Bougies NGK iridium (x4),Électricité,D,2,2,5,3,38.00,72.00,NGK
+s33,BE-2200,Balais essuie-glace 600/400,Électricité,D,2,3,4,4,13.00,29.00,Bosch
+s34,PN-3205,Pneu 205/55 R16 Michelin Primacy,Pneus,D,3,1,12,8,78.00,119.00,Michelin
+s35,PN-3225,Pneu 225/45 R17 Continental,Pneus,D,3,2,6,8,92.00,139.00,Continental

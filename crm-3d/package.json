@@ -1,0 +1,9 @@
+{
+  "name": "crm-3d",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CRM 3D pour atelier : stock et dossiers en cours dans une scène Three.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

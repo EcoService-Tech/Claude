@@ -1,0 +1,1149 @@
+<title>Atelier du Turia</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout : bandeau d'indicateurs en haut, scène 3D plein cadre dessous, panneaux en surimpression (liste à gauche, fiche à droite). */
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --fg: #151a22;
+  --muted: #5b6474;
+  --line: #dde2ea;
+  --accent: #2f5bea;
+  --accent-soft: #e7edfd;
+  --on-accent: #ffffff;
+  --ok: #23925f;
+  --warn: #dd7f08;
+  --crit: #d53636;
+  --crit-soft: #fdeceb;
+  --warn-soft: #fdf1e1;
+  --ok-soft: #e4f4ec;
+  --floor: #e9edf2;
+  --zone: #dfe5ee;
+  --zone-line: #b7c1d1;
+  --rack: #9aa4b5;
+  --stock-ok: #8796ad;
+  --car-recu: #98a2b3;
+  --cabin: #d9e0ea;
+  --plate-bg: #ffffff;
+  --plate-fg: #10131a;
+  --plate-band: #1f45b5;
+  --shadow: 0 8px 28px rgba(21, 26, 34, .10);
+  --font-ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101318; --surface: #191d25; --surface-2: #212631; --fg: #e8ebf0; --muted: #9aa3b2; --line: #2b313d;
+    --accent: #6f8fff; --accent-soft: #1d2645; --on-accent: #0c1020; --ok: #3cbf84; --warn: #f2a23c; --crit: #f05d5d;
+    --crit-soft: #3a1c1e; --warn-soft: #3a2a14; --ok-soft: #15301f; --floor: #171a20; --zone: #1f242d; --zone-line: #3a4252;
+    --rack: #4d5668; --stock-ok: #6b7a93; --car-recu: #77808f; --cabin: #2d3440; --plate-bg: #f4f5f7; --plate-fg: #10131a; --plate-band: #2a52c9;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101318; --surface: #191d25; --surface-2: #212631; --fg: #e8ebf0; --muted: #9aa3b2; --line: #2b313d;
+  --accent: #6f8fff; --accent-soft: #1d2645; --on-accent: #0c1020; --ok: #3cbf84; --warn: #f2a23c; --crit: #f05d5d;
+  --crit-soft: #3a1c1e; --warn-soft: #3a2a14; --ok-soft: #15301f; --floor: #171a20; --zone: #1f242d; --zone-line: #3a4252;
+  --rack: #4d5668; --stock-ok: #6b7a93; --car-recu: #77808f; --cabin: #2d3440; --plate-bg: #f4f5f7; --plate-fg: #10131a; --plate-band: #2a52c9;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  color-scheme: dark;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 14px; line-height: 1.4;
+  overflow: hidden;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+
+/* ---------- En-tête ---------- */
+.top {
+  background: var(--surface); border-bottom: 1px solid var(--line);
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px 20px;
+  position: relative; z-index: 5;
+}
+.brand { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.brand h1 { margin: 0; font-size: 19px; font-weight: 750; font-stretch: 85%; letter-spacing: -.01em; text-wrap: balance; }
+.brand .sub { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.chip[data-mode="local"] .dot, .chip[data-mode="db"] .dot { background: var(--ok); }
+.chip[data-mode="browser"] .dot, .chip[data-mode="demo"] .dot { background: var(--warn); }
+.chip.example { background: var(--warn-soft); color: var(--fg); }
+
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.kpi {
+  text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 10px;
+  padding: 8px 12px; display: grid; gap: 1px; min-width: 0;
+  transition: border-color .15s, background .15s;
+}
+.kpi:hover { border-color: var(--accent); }
+.k-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-value { font-size: 28px; font-weight: 700; font-stretch: 72%; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.k-sub { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi.is-crit { border-color: color-mix(in srgb, var(--crit) 45%, var(--line)); background: var(--crit-soft); }
+.kpi.is-crit .k-value { color: var(--crit); }
+
+.actions { display: flex; gap: 8px; }
+.btn {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px;
+  font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn:hover { border-color: var(--zone-line); background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { filter: brightness(1.06); background: var(--accent); }
+.btn svg { width: 15px; height: 15px; }
+
+/* ---------- Scène ---------- */
+.stage { position: relative; overflow: hidden; min-height: 0; background: var(--bg); }
+.stage canvas { display: block; touch-action: none; }
+.labels { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+
+.zone-label {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 82%, transparent); padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+}
+.rack-label { font-size: 11px; font-weight: 700; color: var(--fg); background: var(--surface); border: 1px solid var(--line); padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.rack-label b { color: var(--accent); margin-right: 4px; }
+.rack-label.far span { display: none; }
+.rack-label.far b { margin-right: 0; }
+.qty {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; padding: 1px 5px; border-radius: 4px;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--line); font-variant-numeric: tabular-nums;
+}
+.qty.bas { color: var(--warn); border-color: var(--warn); }
+.qty.rupture { color: var(--on-accent); background: var(--crit); border-color: var(--crit); }
+
+.tag {
+  pointer-events: auto; cursor: pointer; display: grid; gap: 4px; justify-items: center;
+  transform: translateY(-6px);
+}
+.tag .card {
+  display: none; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
+  padding: 7px 9px; min-width: 150px; max-width: 200px; text-align: left;
+}
+.tag.expanded .card { display: grid; gap: 2px; }
+.tag .client { font-weight: 650; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tag .meta { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.tag .meta .late { color: var(--crit); font-weight: 650; }
+.tag.selected .plate { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.plate {
+  display: inline-flex; align-items: stretch; border-radius: 4px; overflow: hidden; border: 1px solid #1d222b;
+  background: var(--plate-bg); color: var(--plate-fg); font-family: var(--font-mono); font-weight: 600; font-size: 11.5px;
+  line-height: 1; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+.plate .band { background: var(--plate-band); color: #ffffff; font-size: 8px; padding: 3px 3px 2px; display: grid; align-content: end; }
+.plate .num { padding: 4px 6px 3px; letter-spacing: .04em; }
+.plate .flag { width: 8px; align-self: stretch; }
+.plate .flag.late { background: var(--crit); }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.recu { background: var(--surface-2); color: var(--muted); }
+.pill.encours { background: var(--accent-soft); color: var(--accent); }
+.pill.termine { background: var(--ok-soft); color: var(--ok); }
+.pill.livre { background: var(--surface-2); color: var(--fg); }
+.pill.ok { background: var(--surface-2); color: var(--muted); }
+.pill.bas { background: var(--warn-soft); color: var(--warn); }
+.pill.rupture { background: var(--crit-soft); color: var(--crit); }
+.pill.retard { background: var(--crit-soft); color: var(--crit); }
+
+.tip {
+  position: absolute; z-index: 4; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: var(--shadow); padding: 7px 10px; font-size: 12px; max-width: 240px; display: grid; gap: 3px;
+}
+.tip .t-name { font-weight: 650; }
+.tip .t-row { display: flex; gap: 8px; align-items: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Contrôles de vue + légende */
+.views {
+  position: absolute; z-index: 3; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 4px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px; box-shadow: var(--shadow);
+  max-width: calc(100% - 32px);
+}
+.views button { border: 0; background: transparent; padding: 6px 10px; border-radius: 7px; font-weight: 600; font-size: 12.5px; color: var(--muted); }
+.views button:hover { background: var(--surface-2); color: var(--fg); }
+.views button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.views .sep { width: 1px; background: var(--line); margin: 4px 2px; }
+
+.legend {
+  position: absolute; z-index: 3; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; box-shadow: var(--shadow);
+  display: grid; gap: 6px; font-size: 11.5px; color: var(--muted);
+}
+.legend .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.legend .row > b { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg); width: 52px; }
+.sw { display: inline-flex; align-items: center; gap: 5px; }
+.sw i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.sw i.ring { border-radius: 50%; background: transparent; border: 2px solid var(--crit); }
+
+/* Panneaux */
+.panel, .list {
+  position: absolute; z-index: 6; top: 12px; bottom: 12px; width: min(380px, calc(100% - 32px));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.panel { right: max(16px, env(safe-area-inset-right, 0px)); }
+.list { left: max(16px, env(safe-area-inset-left, 0px)); width: min(340px, calc(100% - 32px)); }
+.p-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; position: relative; }
+.p-head h2 { margin: 0; font-size: 18px; font-weight: 700; font-stretch: 88%; line-height: 1.2; text-wrap: balance; padding-right: 34px; }
+.eyebrow { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; font-weight: 600; }
+.p-head .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.x { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: 8px; border: 0; background: transparent; color: var(--muted); font-size: 20px; line-height: 1; }
+.x:hover { background: var(--surface-2); color: var(--fg); }
+.p-body { overflow-y: auto; padding: 14px 16px 16px; flex: 1; min-height: 0; }
+.f { display: grid; gap: 12px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.fld { display: grid; gap: 4px; min-width: 0; }
+.fld > label, .fld > .lbl { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.fld input, .fld select, .fld textarea {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; background: var(--surface); min-width: 0;
+}
+.fld textarea { resize: vertical; min-height: 54px; }
+.fld input:focus, .fld select:focus, .fld textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.fld input[readonly] { background: var(--surface-2); color: var(--muted); }
+.full { grid-column: 1 / -1; }
+.stepper { display: grid; grid-template-columns: 40px 1fr 40px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.stepper button { border: 0; background: var(--surface-2); font-size: 18px; font-weight: 600; }
+.stepper button:hover { background: var(--accent-soft); color: var(--accent); }
+.stepper input { border: 0 !important; border-radius: 0 !important; text-align: center; font-family: var(--font-mono); font-size: 18px; font-weight: 600; box-shadow: none !important; }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg label { position: relative; text-align: center; padding: 7px 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; border-left: 1px solid var(--line); }
+.seg label:first-child { border-left: 0; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--accent); color: var(--on-accent); }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -3px; }
+.steps-hint { font-size: 11.5px; color: var(--muted); }
+.p-actions { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--surface); }
+.p-actions .btn.primary { flex: 1; justify-content: center; }
+.note { font-size: 12px; color: var(--muted); background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fact { background: var(--surface-2); border-radius: 8px; padding: 7px 9px; display: grid; gap: 1px; }
+.fact span { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.fact b { font-size: 15px; font-variant-numeric: tabular-nums; }
+
+.l-head { padding: 12px 12px 10px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; position: relative; }
+.tabs { display: inline-flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 8px; width: max-content; }
+.tabs button { border: 0; background: transparent; padding: 5px 12px; border-radius: 6px; font-weight: 650; font-size: 12.5px; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.filters button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.filters button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.filters button .n { font-variant-numeric: tabular-nums; opacity: .8; margin-left: 3px; }
+.rows { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1; min-height: 0; }
+.rows li button { width: 100%; text-align: left; border: 0; background: transparent; border-radius: 8px; padding: 8px 10px; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; }
+.rows li button:hover { background: var(--surface-2); }
+.rows .r-title { font-weight: 650; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 8px; align-items: center; min-width: 0; }
+.rows .r-title span { overflow: hidden; text-overflow: ellipsis; }
+.rows .r-sub { font-size: 11.5px; color: var(--muted); grid-column: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rows .r-side { grid-row: 1 / span 2; grid-column: 2; display: grid; justify-items: end; gap: 3px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rows .empty { padding: 24px 12px; text-align: center; color: var(--muted); font-size: 13px; }
+
+.toast {
+  position: absolute; z-index: 8; left: 50%; top: 14px; transform: translateX(-50%);
+  background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 13px; box-shadow: var(--shadow);
+  max-width: calc(100% - 32px);
+}
+.toast.err { background: var(--crit); color: #ffffff; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 1320px) {
+  .top { grid-template-columns: 1fr auto; }
+  .kpis { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 640px) {
+  .top { gap: 10px; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .k-value { font-size: 22px; }
+  .kpi { padding: 6px 10px; }
+  .legend { display: none; }
+  .actions .btn .txt { display: none; }
+  .panel, .list { top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: 72%; border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .grid2 { grid-template-columns: 1fr; }
+  .views { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Atelier du Turia</h1>
+      <div class="sub">
+        <span>Garage · Valencia</span>
+        <span class="chip" id="mode" data-mode="pending"><span class="dot"></span><span id="mode-txt">Chargement…</span></span>
+        <span class="chip example" id="example-chip">Données d'exemple</span>
+      </div>
+    </div>
+    <div class="kpis">
+      <button class="kpi" id="kpi-actifs" data-tab="dossiers" data-filter="actifs"><span class="k-label">Dossiers en cours</span><span class="k-value" id="k-actifs">–</span><span class="k-sub" id="k-actifs-sub">&nbsp;</span></button>
+      <button class="kpi" id="kpi-retards" data-tab="dossiers" data-filter="retard"><span class="k-label">Retards</span><span class="k-value" id="k-retards">–</span><span class="k-sub" id="k-retards-sub">date prévue dépassée</span></button>
+      <button class="kpi" id="kpi-ruptures" data-tab="stock" data-filter="rupture"><span class="k-label">Ruptures de stock</span><span class="k-value" id="k-ruptures">–</span><span class="k-sub" id="k-ruptures-sub">&nbsp;</span></button>
+      <button class="kpi" id="kpi-ca" data-tab="dossiers" data-filter="livres"><span class="k-label">CA du mois</span><span class="k-value" id="k-ca">–</span><span class="k-sub" id="k-ca-sub">&nbsp;</span></button>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-list" aria-controls="list"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 4h8M5 8h8M5 12h8M2.5 4h0M2.5 8h0M2.5 12h0"/></svg><span class="txt">Liste</span></button>
+      <button class="btn primary" id="btn-new"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg><span class="txt">Nouveau dossier</span></button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="loading" id="loading">Préparation de l'atelier…</div>
+    <div class="tip" id="tip" hidden></div>
+
+    <div class="views" role="toolbar" aria-label="Vues de la scène">
+      <button data-view="ensemble" aria-pressed="true">Vue d'ensemble</button>
+      <button data-view="atelier" aria-pressed="false">Postes</button>
+      <button data-view="stock" aria-pressed="false">Stock</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button id="btn-details" aria-pressed="false">Étiquettes détaillées</button>
+    </div>
+
+    <div class="legend" aria-label="Légende">
+      <div class="row"><b>Véhicules</b>
+        <span class="sw"><i style="background:var(--car-recu)"></i>Reçu</span>
+        <span class="sw"><i style="background:var(--accent)"></i>En cours</span>
+        <span class="sw"><i style="background:var(--ok)"></i>Terminé</span>
+        <span class="sw"><i class="ring"></i>En retard</span>
+      </div>
+      <div class="row"><b>Stock</b>
+        <span class="sw"><i style="background:var(--stock-ok)"></i>OK</span>
+        <span class="sw"><i style="background:var(--warn)"></i>Bientôt en rupture</span>
+        <span class="sw"><i style="background:var(--crit)"></i>Rupture</span>
+      </div>
+    </div>
+
+    <aside class="list" id="list" hidden aria-label="Liste">
+      <div class="l-head">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="dossiers" aria-selected="true">Dossiers</button>
+          <button role="tab" data-tab="stock" aria-selected="false">Stock</button>
+        </div>
+        <div class="filters" id="filters"></div>
+        <button class="x" id="list-close" aria-label="Fermer la liste">×</button>
+      </div>
+      <ul class="rows" id="rows"></ul>
+    </aside>
+
+    <aside class="panel" id="panel" hidden aria-label="Détail"></aside>
+    <div class="toast" id="toast" role="status" hidden></div>
+  </main>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* ================= Données ================= */
+const STOCK_COLS = ['id','ref','nom','categorie','rayon','niveau','place','quantite','seuil','prix_achat','prix_vente','fournisseur'];
+const DOSSIER_COLS = ['id','numero','immat','vehicule','client','telephone','travaux','poste','etape','date_entree','date_prevue','date_livraison','montant','notes'];
+const STAGES = ['Reçu', 'En cours', 'Terminé', 'Livré'];
+const STAGE_CLASS = { 'Reçu': 'recu', 'En cours': 'encours', 'Terminé': 'termine', 'Livré': 'livre' };
+const WORK_POSTES = ['Diagnostic', 'Pont 1', 'Pont 2', 'Pont 3', 'Carrosserie'];
+const POSTES = ['Réception', ...WORK_POSTES, 'Parking sortie'];
+const RAYON_NAMES = { A: 'Filtration', B: 'Freinage', C: 'Fluides', D: 'Élec. & pneus' };
+
+const state = {
+  stock: [], dossiers: [], mode: 'pending', db: null, dbEmpty: { stock: false, dossiers: false },
+  selected: null, draft: null, detailed: false, hover: null,
+  list: { open: false, tab: 'dossiers', filter: 'actifs' },
+};
+
+const $ = (s, r = document) => r.querySelector(s);
+const num = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
+const eur0 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+function today() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+function iso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function parseDate(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function fmtDate(s) { const d = parseDate(s); return d ? `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}` : '—'; }
+
+function parseCSV(text) {
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; }
+    else if (c !== '\r') f += c;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  const [head = [], ...body] = rows;
+  const keys = head.map((h) => h.trim().replace(/^﻿/, ''));
+  return body.filter((r) => r.some((x) => x.trim() !== '')).map((r) => Object.fromEntries(keys.map((k, i) => [k, (r[i] ?? '').trim()])));
+}
+function toCSV(rows, cols) {
+  const cell = (v) => { v = v == null ? '' : String(v); return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+  return cols.join(',') + '\n' + rows.map((r) => cols.map((c) => cell(r[c])).join(',')).join('\n') + '\n';
+}
+
+function normStock(r) {
+  return { ...r, id: String(r.id || 's' + Math.random().toString(36).slice(2, 8)), rayon: String(r.rayon || 'A').toUpperCase(),
+    niveau: Math.max(1, Math.round(num(r.niveau)) || 1), place: Math.max(1, Math.round(num(r.place)) || 1),
+    quantite: Math.max(0, Math.round(num(r.quantite))), seuil: Math.max(0, Math.round(num(r.seuil))),
+    prix_achat: num(r.prix_achat), prix_vente: num(r.prix_vente) };
+}
+function normDossier(r) {
+  const etape = STAGES.includes(r.etape) ? r.etape : 'Reçu';
+  return { ...r, id: String(r.id || 'd' + Date.now()), etape, montant: num(r.montant), poste: etape === 'Livré' ? '' : (POSTES.includes(r.poste) ? r.poste : 'Réception') };
+}
+function plain(rec, kind) {
+  const cols = kind === 'stock' ? STOCK_COLS : DOSSIER_COLS;
+  return Object.fromEntries(cols.map((c) => [c, rec[c] ?? '']));
+}
+const stockStatus = (s) => (s.quantite <= 0 ? 'rupture' : s.quantite <= s.seuil ? 'bas' : 'ok');
+const STOCK_LABEL = { ok: 'En stock', bas: 'Bientôt en rupture', rupture: 'Rupture' };
+const isLate = (d) => (d.etape === 'Reçu' || d.etape === 'En cours') && parseDate(d.date_prevue) && parseDate(d.date_prevue) < today();
+const isThisMonth = (s) => { const d = parseDate(s), t = today(); return d && d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth(); };
+
+async function loadCSV(path) {
+  try { const r = await fetch(path, { cache: 'no-store' }); if (!r.ok) return []; return parseCSV(await r.text()); }
+  catch { return []; }
+}
+
+/* ================= Enregistrement ================= */
+const MODE_TEXT = {
+  pending: 'Connexion…',
+  local: 'Enregistré dans data/*.csv',
+  browser: 'Enregistré dans ce navigateur',
+  db: 'Enregistré en ligne',
+  demo: 'Démo : modifications non conservées',
+};
+function setMode(m) { state.mode = m; $('#mode').dataset.mode = m; $('#mode-txt').textContent = MODE_TEXT[m]; }
+
+async function persist(kind, rec) {
+  const list = state[kind];
+  const i = list.findIndex((x) => x.id === rec.id);
+  if (i >= 0) list[i] = rec; else list.push(rec);
+  render();
+  try {
+    if (state.mode === 'db') {
+      const col = state.db.collection(kind);
+      if (state.dbEmpty[kind]) { for (const r of list) await col.doc(r.id).set(plain(r, kind)); state.dbEmpty[kind] = false; }
+      else await col.doc(rec.id).set(plain(rec, kind));
+    } else if (state.mode === 'local') {
+      const res = await fetch('api/save/' + kind, { method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: toCSV(list, kind === 'stock' ? STOCK_COLS : DOSSIER_COLS) });
+      if (!res.ok) throw new Error('le serveur a répondu ' + res.status);
+    } else if (state.mode === 'browser') {
+      try { localStorage.setItem('crm3d:' + kind, JSON.stringify(list)); } catch { throw new Error('stockage du navigateur indisponible'); }
+    }
+    return true;
+  } catch (e) {
+    toast('Échec de l’enregistrement : ' + (e?.message || e?.code || 'erreur inconnue') + '. Réessayez.', true);
+    return false;
+  }
+}
+
+/* ================= Scène 3D ================= */
+const stage = $('#stage');
+let scene, camera, renderer, labelRenderer, controls, staticGroup, dynGroup, selRing, selBox, tween = null;
+let pickables = [];
+const objects = new Map(); // "kind:id" -> { group, focus: Vector3, mats: [], tag }
+const qtyLabels = [];
+const lateRings = [];
+const rackLabels = [];
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const color = (n) => new THREE.Color(css(n) || '#888888');
+const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.82, metalness: 0.02, ...o });
+
+const ZONES = {
+  'Rayonnages':     { x: -13.6, z: -11,  w: 17,  d: 5.2 },
+  'Diagnostic':     { x: 0,     z: -10,  w: 5.6, d: 7,   slots: [[0, -10]] },
+  'Carrosserie':    { x: 8,     z: -10,  w: 6.6, d: 7,   slots: [[8, -10]], booth: true },
+  'Pont 1':         { x: -6,    z: 0.5,  w: 5.6, d: 7,   slots: [[-6, 0.5]], lift: true },
+  'Pont 2':         { x: 1,     z: 0.5,  w: 5.6, d: 7,   slots: [[1, 0.5]], lift: true },
+  'Pont 3':         { x: 8,     z: 0.5,  w: 5.6, d: 7,   slots: [[8, 0.5]], lift: true },
+  'Réception':      { x: -14,   z: 9,    w: 15,  d: 6.4, slots: [[-19, 9], [-15.5, 9], [-12, 9], [-8.5, 9]] },
+  'Parking sortie': { x: 10,    z: 9,    w: 15,  d: 6.4, slots: [[4.5, 9], [8, 9], [11.5, 9], [15, 9]] },
+};
+const VIEWS = {
+  ensemble: { pos: [-2, 30, 31], target: [-2, 0, -0.5] },
+  atelier:  { pos: [3, 15, 19],  target: [3, 0, -2.5] },
+  stock:    { pos: [-13.6, 6.5, -2.5], target: [-13.6, 1.4, -11] },
+};
+
+function initScene() {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  stage.prepend(renderer.domElement);
+
+  labelRenderer = new CSS2DRenderer();
+  labelRenderer.domElement.className = 'labels';
+  renderer.domElement.after(labelRenderer.domElement);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(40, 1, 0.1, 400);
+  camera.position.set(...VIEWS.ensemble.pos);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(...VIEWS.ensemble.target);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.09;
+  controls.maxPolarAngle = 1.36;
+  controls.minDistance = 4;
+  controls.maxDistance = 75;
+  controls.addEventListener('start', () => { tween = null; setViewButtons(null); });
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a93a6, 1.15));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+  sun.position.set(-14, 32, 20);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 24, bottom: -24, near: 1, far: 90 });
+  sun.shadow.bias = -0.0005;
+  scene.add(sun);
+
+  staticGroup = new THREE.Group(); dynGroup = new THREE.Group();
+  scene.add(staticGroup, dynGroup);
+
+  new ResizeObserver(resize).observe(stage);
+  resize();
+  camera.position.copy(fitDistance(camera.position, controls.target));
+  buildStatic();
+
+  const el = renderer.domElement;
+  let down = null;
+  el.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
+  el.addEventListener('pointerup', (e) => {
+    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) { down = null; return; }
+    down = null;
+    const ref = pick(e);
+    if (ref) select(ref.kind, ref.id, { focus: false });
+    else if (!$('#panel').hidden) closePanel();
+  });
+  el.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') hover(e); });
+  el.addEventListener('pointerleave', () => { setHover(null); $('#tip').hidden = true; });
+
+  const mq = matchMedia('(prefers-color-scheme: dark)');
+  mq.addEventListener?.('change', retheme);
+  new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  renderer.setAnimationLoop(tick);
+}
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h); labelRenderer.setSize(w, h);
+  camera.aspect = w / h;
+  // Sur écran étroit, on recule la caméra pour garder tout l'atelier dans le cadre.
+  camera.fov = w < 640 ? 55 : 40;
+  camera.updateProjectionMatrix();
+}
+
+function clearGroup(g) {
+  for (const child of [...g.children]) {
+    g.remove(child);
+    child.traverse((o) => {
+      if (o.isCSS2DObject) o.element.remove();
+      o.geometry?.dispose();
+      if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
+    });
+  }
+}
+
+function label(el, x, y, z, parent) {
+  const o = new CSS2DObject(el); o.position.set(x, y, z); (parent || dynGroup).add(o); return o;
+}
+function div(cls, html) { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; return d; }
+
+function buildStatic() {
+  clearGroup(staticGroup);
+  scene.background = color('--bg');
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(46, 31), mat(color('--floor'), { roughness: 0.95 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.set(-1.5, 0, -0.8); floor.receiveShadow = true;
+  staticGroup.add(floor);
+
+  const zoneMat = mat(color('--zone'), { roughness: 0.95 });
+  const lineMat = new THREE.LineBasicMaterial({ color: color('--zone-line') });
+  for (const [name, z] of Object.entries(ZONES)) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(z.w, z.d), zoneMat.clone());
+    p.rotation.x = -Math.PI / 2; p.position.set(z.x, 0.01, z.z); p.receiveShadow = true;
+    staticGroup.add(p);
+    const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => new THREE.Vector3(z.x + a * z.w / 2, 0.02, z.z + b * z.d / 2));
+    staticGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), lineMat.clone()));
+    label(div('zone-label', esc(name)), z.x, 0.05, z.z + z.d / 2 + 0.55, staticGroup);
+
+    if (z.lift) {
+      const postMat = mat(color('--rack'), { metalness: 0.3, roughness: 0.5 });
+      for (const sx of [-1.55, 1.55]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.32, 2.6, 0.32), postMat);
+        post.position.set(z.x + sx, 1.3, z.z); post.castShadow = true; staticGroup.add(post);
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.16), postMat);
+        arm.position.set(z.x + sx * 0.72, 0.62, z.z - 1.1); staticGroup.add(arm);
+        const arm2 = arm.clone(); arm2.position.z = z.z + 1.1; staticGroup.add(arm2);
+      }
+    }
+    if (z.booth) {
+      const wallMat = mat(color('--accent'), { transparent: true, opacity: 0.09, depthWrite: false });
+      const back = new THREE.Mesh(new THREE.BoxGeometry(z.w, 2.8, 0.05), wallMat);
+      back.position.set(z.x, 1.4, z.z - z.d / 2); staticGroup.add(back);
+      for (const s of [-1, 1]) {
+        const side = new THREE.Mesh(new THREE.BoxGeometry(0.05, 2.8, z.d), wallMat);
+        side.position.set(z.x + s * z.w / 2, 1.4, z.z); staticGroup.add(side);
+      }
+    }
+  }
+
+  // Accueil : comptoir + écran
+  const desk = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1, 1), mat(color('--surface')));
+  desk.position.set(16, 0.5, -3); desk.castShadow = true; desk.receiveShadow = true; staticGroup.add(desk);
+  const screen = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.55, 0.06), mat(color('--fg')));
+  screen.position.set(15.6, 1.35, -3.2); staticGroup.add(screen);
+  label(div('zone-label', 'Accueil'), 16, 0.05, -1.6, staticGroup);
+}
+
+function makeCar(bodyColor) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.62, 4.1), mat(bodyColor, { roughness: 0.45, metalness: 0.15 }));
+  body.position.y = 0.58; body.castShadow = true; g.add(body);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.56, 2.05), mat(color('--cabin'), { roughness: 0.25, metalness: 0.1 }));
+  cabin.position.set(0, 1.16, 0.15); cabin.castShadow = true; g.add(cabin);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 1.7), mat(bodyColor, { roughness: 0.45 }));
+  roof.position.set(0, 1.47, 0.15); g.add(roof);
+  const wheelMat = mat(new THREE.Color('#22262e'), { roughness: 0.9 });
+  for (const [x, z] of [[-0.88, -1.3], [0.88, -1.3], [-0.88, 1.3], [0.88, 1.3]]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.26, 18), wheelMat);
+    w.rotation.z = Math.PI / 2; w.position.set(x, 0.36, z); w.castShadow = true; g.add(w);
+  }
+  const lightMat = mat(new THREE.Color('#fff4d6'), { emissive: new THREE.Color('#fff1c4'), emissiveIntensity: 0.5 });
+  for (const x of [-0.6, 0.6]) {
+    const l = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.12, 0.04), lightMat);
+    l.position.set(x, 0.68, 2.06); g.add(l);
+  }
+  return g;
+}
+
+function plateHTML(d, late) {
+  return `<span class="plate"><span class="band">E</span><span class="num">${esc(d.immat || '— — —')}</span>${late ? '<span class="flag late"></span>' : ''}</span>`;
+}
+
+function buildDynamic() {
+  clearGroup(dynGroup);
+  pickables = []; objects.clear(); qtyLabels.length = 0; lateRings.length = 0; rackLabels.length = 0;
+
+  // ---- Rayonnages + stock
+  const letters = [...new Set(state.stock.map((s) => s.rayon))].sort();
+  const rackMat = mat(color('--rack'), { metalness: 0.35, roughness: 0.55 });
+  const LEVEL_Y = [0.32, 1.22, 2.12];
+  const rackX = (i) => -19.5 + i * 3.95;
+  letters.forEach((L, i) => {
+    const x = rackX(i), z = -11;
+    for (const [dx, dz] of [[-1.62, -0.45], [1.62, -0.45], [-1.62, 0.45], [1.62, 0.45]]) {
+      const up = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.9, 0.08), rackMat);
+      up.position.set(x + dx, 1.45, z + dz); up.castShadow = true; dynGroup.add(up);
+    }
+    for (const y of LEVEL_Y) {
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.06, 0.95), rackMat);
+      shelf.position.set(x, y, z); shelf.castShadow = true; shelf.receiveShadow = true; dynGroup.add(shelf);
+    }
+    rackLabels.push(label(div('rack-label', `<b>${esc(L)}</b><span>${esc(RAYON_NAMES[L] || 'Rayon ' + L)}</span>`), x, 3.25, z));
+  });
+
+  const C = { ok: color('--stock-ok'), bas: color('--warn'), rupture: color('--crit') };
+  for (const s of state.stock) {
+    const ri = letters.indexOf(s.rayon);
+    const lvl = Math.min(s.niveau, LEVEL_Y.length) - 1;
+    const x = rackX(ri) - 1.2 + (Math.min(s.place, 4) - 1) * 0.8, z = -11;
+    const st = stockStatus(s);
+    const g = new THREE.Group(); g.position.set(x, LEVEL_Y[lvl] + 0.03, z);
+    let mesh; const mats = [];
+    if (st === 'rupture') {
+      const m = mat(C.rupture, { transparent: true, opacity: 0.22, depthWrite: false });
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.5, 0.62), m);
+      mesh.position.y = 0.25;
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({ color: C.rupture }));
+      edges.position.y = 0.25; g.add(edges);
+      mats.push(m);
+    } else {
+      const h = 0.14 + 0.62 * Math.min(1, s.quantite / Math.max(1, s.seuil * 2.5));
+      const m = mat(C[st], { roughness: 0.7 });
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(0.62, h, 0.62), m);
+      mesh.position.y = h / 2; mesh.castShadow = true;
+      mats.push(m);
+    }
+    mesh.userData.ref = { kind: 'stock', id: s.id };
+    g.add(mesh); pickables.push(mesh); dynGroup.add(g);
+    const q = label(div('qty ' + st, `×${s.quantite}`), 0, 0.98, 0.32, g);
+    q.userData.always = st !== 'ok';
+    qtyLabels.push(q);
+    objects.set('stock:' + s.id, { group: g, mats, focus: new THREE.Vector3(x, LEVEL_Y[lvl] + 0.4, z), kind: 'stock' });
+  }
+
+  // ---- Véhicules par poste
+  const byPoste = new Map();
+  for (const d of state.dossiers) {
+    if (d.etape === 'Livré') continue;
+    const p = ZONES[d.poste]?.slots ? d.poste : 'Réception';
+    if (!byPoste.has(p)) byPoste.set(p, []);
+    byPoste.get(p).push(d);
+  }
+  const stageColor = { 'Reçu': color('--car-recu'), 'En cours': color('--accent'), 'Terminé': color('--ok') };
+  for (const [poste, list] of byPoste) {
+    const zone = ZONES[poste];
+    list.forEach((d, i) => {
+      const slot = zone.slots[i] || [zone.slots[zone.slots.length - 1][0] + (i - zone.slots.length + 1) * 2.4, zone.slots[zone.slots.length - 1][1]];
+      const lifted = zone.lift && d.etape === 'En cours';
+      const car = makeCar(stageColor[d.etape]);
+      car.position.set(slot[0], lifted ? 0.72 : 0, slot[1]);
+      car.traverse((o) => { if (o.isMesh) { o.userData.ref = { kind: 'dossiers', id: d.id }; pickables.push(o); } });
+      dynGroup.add(car);
+
+      const late = isLate(d);
+      if (late) {
+        const ring = new THREE.Mesh(new THREE.RingGeometry(2.35, 2.6, 48), new THREE.MeshBasicMaterial({ color: color('--crit'), transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
+        ring.rotation.x = -Math.PI / 2; ring.position.set(slot[0], 0.04, slot[1]);
+        dynGroup.add(ring); lateRings.push(ring);
+      }
+      const tagEl = div('tag', `
+        ${plateHTML(d, late)}
+        <div class="card">
+          <div class="client">${esc(d.client || 'Client à renseigner')}</div>
+          <div class="meta"><span>${esc(d.vehicule || '')}</span></div>
+          <div class="meta"><span class="pill ${STAGE_CLASS[d.etape]}">${esc(d.etape)}</span><span class="${late ? 'late' : ''}">${late ? 'Retard · ' : 'Prévu '}${fmtDate(d.date_prevue)}</span></div>
+        </div>`);
+      tagEl.addEventListener('click', () => select('dossiers', d.id, { focus: false }));
+      tagEl.addEventListener('mouseenter', () => setHover({ kind: 'dossiers', id: d.id }));
+      tagEl.addEventListener('mouseleave', () => setHover(null));
+      const tag = label(tagEl, 0, 2.15, 0, car);
+      objects.set('dossiers:' + d.id, { group: car, mats: [], focus: new THREE.Vector3(slot[0], 1, slot[1]), kind: 'dossiers', tag: tagEl });
+    });
+  }
+
+  selRing = new THREE.Mesh(new THREE.RingGeometry(2.7, 2.9, 56), new THREE.MeshBasicMaterial({ color: color('--accent'), side: THREE.DoubleSide, transparent: true, depthWrite: false }));
+  selRing.rotation.x = -Math.PI / 2; selRing.visible = false; dynGroup.add(selRing);
+  selBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.76, 0.9, 0.76)), new THREE.LineBasicMaterial({ color: color('--accent') }));
+  selBox.visible = false; dynGroup.add(selBox);
+  applySelection();
+}
+
+function applySelection() {
+  for (const [key, o] of objects) {
+    const on = state.selected && key === `${state.selected.kind}:${state.selected.id}`;
+    const hov = state.hover && key === `${state.hover.kind}:${state.hover.id}`;
+    if (on && o.kind === 'stock' && selBox) { selBox.position.set(o.group.position.x, o.group.position.y + 0.45, o.group.position.z); selBox.visible = true; }
+    if (o.tag) { o.tag.classList.toggle('selected', !!on); o.tag.classList.toggle('expanded', !!(on || hov || state.detailed)); }
+    if (on && o.kind === 'dossiers' && selRing) { selRing.position.set(o.focus.x, 0.05, o.focus.z); selRing.visible = true; }
+  }
+  if (selRing && (!state.selected || state.selected.kind !== 'dossiers' || !objects.has('dossiers:' + state.selected.id))) selRing.visible = false;
+  if (selBox && (!state.selected || state.selected.kind !== 'stock' || !objects.has('stock:' + state.selected.id))) selBox.visible = false;
+}
+
+function pick(e) {
+  const r = renderer.domElement.getBoundingClientRect();
+  pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObjects(pickables, false)[0];
+  return hit ? hit.object.userData.ref : null;
+}
+
+let hoverQueued = false;
+function hover(e) {
+  if (hoverQueued) return; hoverQueued = true;
+  requestAnimationFrame(() => {
+    hoverQueued = false;
+    const ref = pick(e);
+    renderer.domElement.style.cursor = ref ? 'pointer' : '';
+    setHover(ref);
+    const tip = $('#tip');
+    if (ref?.kind === 'stock') {
+      const s = state.stock.find((x) => x.id === ref.id); if (!s) return;
+      const st = stockStatus(s);
+      tip.innerHTML = `<div class="t-name">${esc(s.nom)}</div>
+        <div class="t-row"><span class="pill ${st}">${STOCK_LABEL[st]}</span><span>${s.quantite} en stock · seuil ${s.seuil}</span></div>
+        <div class="t-row">${esc(s.ref)} · Rayon ${esc(s.rayon)}, niveau ${s.niveau}, place ${s.place}</div>`;
+      const r = stage.getBoundingClientRect();
+      tip.hidden = false;
+      const x = Math.min(e.clientX - r.left + 14, r.width - tip.offsetWidth - 8);
+      const y = Math.max(8, e.clientY - r.top - tip.offsetHeight - 10);
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    } else tip.hidden = true;
+  });
+}
+function setHover(ref) {
+  const same = (a, b) => (a && b ? a.kind === b.kind && a.id === b.id : a === b);
+  if (same(ref, state.hover)) return;
+  state.hover = ref; applySelection();
+}
+
+// Écran en portrait : on recule la caméra pour que la largeur de l'atelier tienne dans le cadre.
+function fitDistance(p, t) {
+  const k = camera.aspect < 1.2 ? Math.min(2.2, 1.2 / camera.aspect) : 1;
+  return t.clone().add(p.clone().sub(t).multiplyScalar(k));
+}
+function flyTo(pos, target, fit = false) {
+  let p = new THREE.Vector3(...pos); const t = new THREE.Vector3(...target);
+  if (fit) p = fitDistance(p, t);
+  if (reduceMotion) { camera.position.copy(p); controls.target.copy(t); return; }
+  tween = { start: performance.now(), dur: 750, p0: camera.position.clone(), t0: controls.target.clone(), p1: p, t1: t };
+}
+function focusOn(kind, id) {
+  const o = objects.get(`${kind}:${id}`); if (!o) return;
+  const f = o.focus;
+  const narrow = stage.clientWidth < 640;
+  if (kind === 'stock') flyTo([f.x, f.y + 2.2, f.z + (narrow ? 8 : 6)], [f.x, f.y, f.z]);
+  else flyTo([f.x + 2, 8.5, f.z + (narrow ? 14 : 11)], [f.x, 0.8, f.z]);
+}
+function setViewButtons(v) { document.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === v))); }
+
+const _v = new THREE.Vector3();
+function tick(now) {
+  if (tween) {
+    let k = Math.min(1, (now - tween.start) / tween.dur); k = 1 - Math.pow(1 - k, 3);
+    camera.position.lerpVectors(tween.p0, tween.p1, k);
+    controls.target.lerpVectors(tween.t0, tween.t1, k);
+    if (k >= 1) tween = null;
+  }
+  controls.update();
+  if (!reduceMotion) {
+    const s = 1 + 0.06 * Math.sin(now / 280);
+    for (const r of lateRings) { r.scale.set(s, s, 1); r.material.opacity = 0.55 + 0.35 * Math.sin(now / 280); }
+  }
+  for (const q of qtyLabels) {
+    q.getWorldPosition(_v);
+    const dist = camera.position.distanceTo(_v);
+    q.visible = dist < 17 || (q.userData.always && dist < 30);
+  }
+  for (const r of rackLabels) { r.getWorldPosition(_v); r.element.classList.toggle('far', camera.position.distanceTo(_v) > 24); }
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+}
+
+function retheme() { requestAnimationFrame(() => { buildStatic(); buildDynamic(); }); }
+
+/* ================= Interface ================= */
+function render() {
+  updateKPIs();
+  buildDynamic();
+  renderList();
+  $('#loading').hidden = true;
+}
+
+function updateKPIs() {
+  const actifs = state.dossiers.filter((d) => d.etape !== 'Livré');
+  const late = actifs.filter(isLate);
+  const rupt = state.stock.filter((s) => stockStatus(s) === 'rupture');
+  const bas = state.stock.filter((s) => stockStatus(s) === 'bas');
+  const livres = state.dossiers.filter((d) => d.etape === 'Livré' && isThisMonth(d.date_livraison));
+  const ca = livres.reduce((a, d) => a + d.montant, 0);
+  const n = (st) => actifs.filter((d) => d.etape === st).length;
+
+  $('#k-actifs').textContent = actifs.length;
+  $('#k-actifs-sub').textContent = `${n('Reçu')} reçus · ${n('En cours')} en atelier · ${n('Terminé')} prêts`;
+  $('#k-retards').textContent = late.length;
+  $('#kpi-retards').classList.toggle('is-crit', late.length > 0);
+  $('#k-ruptures').textContent = rupt.length;
+  $('#k-ruptures-sub').textContent = `+ ${bas.length} bientôt en rupture`;
+  $('#kpi-ruptures').classList.toggle('is-crit', rupt.length > 0);
+  $('#k-ca').textContent = eur0.format(ca);
+  $('#k-ca-sub').textContent = `${livres.length} véhicule${livres.length > 1 ? 's' : ''} livré${livres.length > 1 ? 's' : ''} en ${MONTHS[today().getMonth()]}`;
+}
+
+/* ---------- Liste ---------- */
+const FILTERS = {
+  dossiers: [
+    ['actifs', 'En cours', (d) => d.etape !== 'Livré'],
+    ['retard', 'Retards', isLate],
+    ['livres', 'Livrés ce mois', (d) => d.etape === 'Livré' && isThisMonth(d.date_livraison)],
+    ['tous', 'Tous', () => true],
+  ],
+  stock: [
+    ['tous', 'Tout', () => true],
+    ['rupture', 'Ruptures', (s) => stockStatus(s) === 'rupture'],
+    ['bas', 'Bientôt en rupture', (s) => stockStatus(s) === 'bas'],
+  ],
+};
+function openList(tab, filter) {
+  state.list = { open: true, tab: tab || state.list.tab, filter: filter || FILTERS[tab || state.list.tab][0][0] };
+  $('#list').hidden = false;
+  if (stage.clientWidth < 640) closePanel();
+  renderList();
+}
+function renderList() {
+  if (!state.list.open) return;
+  const { tab, filter } = state.list;
+  document.querySelectorAll('#list [role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  const data = state[tab];
+  $('#filters').innerHTML = FILTERS[tab].map(([k, l, fn]) => `<button data-f="${k}" aria-pressed="${k === filter}">${l}<span class="n">${data.filter(fn).length}</span></button>`).join('');
+  const fn = (FILTERS[tab].find((f) => f[0] === filter) || FILTERS[tab][0])[2];
+  let rows = data.filter(fn);
+  if (tab === 'dossiers') {
+    rows.sort((a, b) => (isLate(b) - isLate(a)) || String(a.date_prevue).localeCompare(String(b.date_prevue)));
+    $('#rows').innerHTML = rows.length ? rows.map((d) => {
+      const late = isLate(d);
+      return `<li><button data-kind="dossiers" data-id="${esc(d.id)}">
+        <span class="r-title">${plateHTML(d, late)}<span>${esc(d.client)}</span></span>
+        <span class="r-sub">${esc(d.travaux)}${d.poste ? ' · ' + esc(d.poste) : ''}</span>
+        <span class="r-side"><span class="pill ${late ? 'retard' : STAGE_CLASS[d.etape]}">${late ? 'Retard' : esc(d.etape)}</span><span>${d.etape === 'Livré' ? 'Livré ' + fmtDate(d.date_livraison) : 'Prévu ' + fmtDate(d.date_prevue)} · ${eur0.format(d.montant)}</span></span>
+      </button></li>`;
+    }).join('') : '<li class="empty">Aucun dossier dans cette catégorie.</li>';
+  } else {
+    rows.sort((a, b) => a.rayon.localeCompare(b.rayon) || a.niveau - b.niveau || a.place - b.place);
+    $('#rows').innerHTML = rows.length ? rows.map((s) => {
+      const st = stockStatus(s);
+      return `<li><button data-kind="stock" data-id="${esc(s.id)}">
+        <span class="r-title"><span>${esc(s.nom)}</span></span>
+        <span class="r-sub">${esc(s.ref)} · ${esc(s.rayon)}${s.niveau}-${s.place}</span>
+        <span class="r-side"><span class="pill ${st}">${s.quantite} / seuil ${s.seuil}</span></span>
+      </button></li>`;
+    }).join('') : '<li class="empty">Rien à signaler ici.</li>';
+  }
+}
+
+/* ---------- Panneau détail ---------- */
+function select(kind, id, { focus = true } = {}) {
+  state.selected = { kind, id }; state.draft = null;
+  openPanel();
+  applySelection();
+  if (focus) focusOn(kind, id);
+}
+function closePanel() {
+  $('#panel').hidden = true; state.selected = null; state.draft = null; applySelection();
+}
+function currentRecord() {
+  if (state.draft) return state.draft;
+  const s = state.selected; return s ? state[s.kind].find((x) => x.id === s.id) : null;
+}
+
+function fld(id, lbl, val, attrs = '', cls = '') {
+  return `<div class="fld ${cls}"><label for="f-${id}">${lbl}</label><input id="f-${id}" name="${id}" value="${esc(val)}" ${attrs}></div>`;
+}
+
+function openPanel() {
+  const rec = currentRecord(); const panel = $('#panel');
+  if (!rec) return closePanel();
+  if (stage.clientWidth < 640) { $('#list').hidden = true; state.list.open = false; }
+  panel.hidden = false;
+  panel.innerHTML = state.selected.kind === 'stock' ? stockPanel(rec) : dossierPanel(rec);
+  panel.querySelector('.x').addEventListener('click', closePanel);
+  panel.querySelector('[data-cancel]').addEventListener('click', closePanel);
+  const form = panel.querySelector('form');
+  form.addEventListener('submit', onSubmit);
+  form.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
+    const inp = form.querySelector('#f-quantite'); inp.value = Math.max(0, num(inp.value) + Number(b.dataset.step));
+  }));
+  form.querySelectorAll('input[name=etape]').forEach((r) => r.addEventListener('change', () => onStageChange(form, r.value)));
+}
+
+function stockPanel(s) {
+  const st = stockStatus(s);
+  const marge = s.prix_vente > 0 ? Math.round((1 - s.prix_achat / s.prix_vente) * 100) + ' %' : '—';
+  return `
+  <div class="p-head">
+    <span class="eyebrow">Pièce · Rayon ${esc(s.rayon)}, niveau ${s.niveau}, place ${s.place}</span>
+    <h2>${esc(s.nom)}</h2>
+    <div class="row"><span class="pill ${st}">${STOCK_LABEL[st]}</span><span class="eyebrow" style="text-transform:none;letter-spacing:0">${esc(s.ref)}</span></div>
+    <button class="x" aria-label="Fermer">×</button>
+  </div>
+  <form class="f" id="f-form" style="display:contents">
+  <div class="p-body"><div class="f">
+    <div class="fld"><span class="lbl">Quantité en stock</span>
+      <div class="stepper"><button type="button" data-step="-1" aria-label="Retirer une unité">−</button><input id="f-quantite" name="quantite" type="number" min="0" step="1" value="${s.quantite}" aria-label="Quantité"><button type="button" data-step="1" aria-label="Ajouter une unité">+</button></div>
+    </div>
+    <div class="facts">
+      <div class="fact"><span>Valeur stock</span><b>${eur0.format(s.quantite * s.prix_achat)}</b></div>
+      <div class="fact"><span>Marge</span><b>${marge}</b></div>
+      <div class="fact"><span>À commander</span><b>${Math.max(0, s.seuil * 2 - s.quantite)}</b></div>
+    </div>
+    <div class="grid2">
+      ${fld('nom', 'Désignation', s.nom, 'required', 'full')}
+      ${fld('ref', 'Référence', s.ref)}
+      ${fld('categorie', 'Catégorie', s.categorie)}
+      ${fld('seuil', 'Seuil d’alerte', s.seuil, 'type="number" min="0" step="1"')}
+      ${fld('fournisseur', 'Fournisseur', s.fournisseur)}
+      ${fld('prix_achat', 'Prix d’achat HT (€)', s.prix_achat, 'type="number" min="0" step="0.01"')}
+      ${fld('prix_vente', 'Prix de vente HT (€)', s.prix_vente, 'type="number" min="0" step="0.01"')}
+    </div>
+    <p class="note">« À commander » = de quoi revenir à deux fois le seuil d’alerte.</p>
+  </div></div>
+  <div class="p-actions"><button type="submit" class="btn primary">Enregistrer</button><button type="button" class="btn" data-cancel>Fermer</button></div>
+  </form>`;
+}
+
+function dossierPanel(d) {
+  const late = isLate(d);
+  const isNew = !!state.draft;
+  const posteOpts = POSTES.map((p) => `<option ${p === d.poste ? 'selected' : ''}>${esc(p)}</option>`).join('');
+  return `
+  <div class="p-head">
+    <span class="eyebrow">${isNew ? 'Nouveau dossier' : 'Ordre de réparation'} · ${esc(d.numero)}</span>
+    <h2>${esc(d.vehicule || 'Véhicule à renseigner')}</h2>
+    <div class="row">${plateHTML(d, late)}${late ? '<span class="pill retard">En retard</span>' : `<span class="pill ${STAGE_CLASS[d.etape]}">${esc(d.etape)}</span>`}</div>
+    <button class="x" aria-label="Fermer">×</button>
+  </div>
+  <form class="f" id="f-form" style="display:contents">
+  <div class="p-body"><div class="f">
+    <div class="fld"><span class="lbl">Étape</span>
+      <div class="seg" role="radiogroup" aria-label="Étape">
+        ${STAGES.map((s) => `<label><input type="radio" name="etape" value="${s}" ${s === d.etape ? 'checked' : ''}>${s}</label>`).join('')}
+      </div>
+      <span class="steps-hint" id="stage-hint">${stageHint(d.etape)}</span>
+    </div>
+    <div class="grid2">
+      ${fld('client', 'Client', d.client, 'required autocomplete="off"')}
+      ${fld('telephone', 'Téléphone', d.telephone, 'type="tel"')}
+      ${fld('vehicule', 'Véhicule', d.vehicule)}
+      ${fld('immat', 'Immatriculation', d.immat, 'style="font-family:var(--font-mono);text-transform:uppercase"')}
+      <div class="fld full"><label for="f-travaux">Travaux</label><textarea id="f-travaux" name="travaux" rows="2">${esc(d.travaux)}</textarea></div>
+      <div class="fld"><label for="f-poste">Poste</label><select id="f-poste" name="poste" ${d.etape === 'Livré' ? 'disabled' : ''}>${posteOpts}</select></div>
+      ${fld('montant', 'Montant TTC (€)', d.montant, 'type="number" min="0" step="0.01"')}
+      ${fld('date_entree', 'Entrée', d.date_entree, 'type="date"')}
+      ${fld('date_prevue', 'Date prévue', d.date_prevue, 'type="date"')}
+      ${fld('date_livraison', 'Livré le', d.date_livraison, 'type="date"')}
+      <div class="fld full"><label for="f-notes">Notes</label><textarea id="f-notes" name="notes" rows="2">${esc(d.notes)}</textarea></div>
+    </div>
+  </div></div>
+  <div class="p-actions"><button type="submit" class="btn primary">${isNew ? 'Créer le dossier' : 'Enregistrer'}</button><button type="button" class="btn" data-cancel>${isNew ? 'Annuler' : 'Fermer'}</button></div>
+  </form>`;
+}
+
+function stageHint(s) {
+  return { 'Reçu': 'Le véhicule attend en réception.', 'En cours': 'Le véhicule est sur un poste de travail.', 'Terminé': 'Prêt : le véhicule passe au parking de sortie.', 'Livré': 'Rendu au client : compte dans le CA du mois.' }[s];
+}
+
+function freeWorkPoste(exceptId) {
+  const used = new Set(state.dossiers.filter((x) => x.id !== exceptId && x.etape !== 'Livré').map((x) => x.poste));
+  return ['Pont 1', 'Pont 2', 'Pont 3', 'Diagnostic', 'Carrosserie'].find((p) => !used.has(p)) || 'Pont 1';
+}
+
+function onStageChange(form, etape) {
+  const sel = form.querySelector('#f-poste');
+  const rec = currentRecord();
+  sel.disabled = etape === 'Livré';
+  if (etape === 'Reçu') sel.value = 'Réception';
+  else if (etape === 'Terminé') sel.value = 'Parking sortie';
+  else if (etape === 'En cours' && !WORK_POSTES.includes(sel.value)) sel.value = freeWorkPoste(rec?.id);
+  const liv = form.querySelector('#f-date_livraison');
+  if (etape === 'Livré' && !liv.value) liv.value = iso(today());
+  $('#stage-hint').textContent = stageHint(etape);
+}
+
+async function onSubmit(e) {
+  e.preventDefault();
+  const form = e.currentTarget; const kind = state.selected.kind;
+  const base = currentRecord(); if (!base) return;
+  const fd = new FormData(form);
+  const patch = Object.fromEntries([...fd.entries()].map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]));
+  let rec;
+  if (kind === 'stock') rec = normStock({ ...base, ...patch });
+  else {
+    if (patch.etape === 'Livré') patch.poste = '';
+    if (patch.immat) patch.immat = patch.immat.toUpperCase();
+    rec = normDossier({ ...base, ...patch });
+  }
+  const wasNew = !!state.draft;
+  state.draft = null;
+  const ok = await persist(kind, rec);
+  if (ok) toast(kind === 'stock' ? `${rec.nom} : enregistré` : wasNew ? `Dossier ${rec.numero} créé` : `Dossier ${rec.numero} enregistré`);
+  state.selected = { kind, id: rec.id };
+  openPanel(); applySelection();
+}
+
+function newDossier() {
+  const t = today(); const due = new Date(t); due.setDate(due.getDate() + 2);
+  const prefix = `OR-${String(t.getFullYear()).slice(2)}${String(t.getMonth() + 1).padStart(2, '0')}-`;
+  const max = state.dossiers.filter((d) => String(d.numero).startsWith(prefix)).reduce((m, d) => Math.max(m, parseInt(String(d.numero).slice(prefix.length), 10) || 0), 0);
+  state.draft = { id: 'd' + Date.now().toString(36), numero: prefix + String(max + 1).padStart(3, '0'), immat: '', vehicule: '', client: '', telephone: '',
+    travaux: '', poste: 'Réception', etape: 'Reçu', date_entree: iso(t), date_prevue: iso(due), date_livraison: '', montant: 0, notes: '' };
+  state.selected = { kind: 'dossiers', id: state.draft.id };
+  openPanel(); applySelection();
+  $('#f-client')?.focus();
+}
+
+let toastTimer;
+function toast(msg, err = false) {
+  const t = $('#toast'); t.textContent = msg; t.classList.toggle('err', err); t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, err ? 6000 : 2600);
+}
+
+/* ---------- Événements ---------- */
+document.querySelectorAll('.kpi').forEach((b) => b.addEventListener('click', () => openList(b.dataset.tab, b.dataset.filter)));
+$('#btn-list').addEventListener('click', () => { if ($('#list').hidden) openList(); else { $('#list').hidden = true; state.list.open = false; } });
+$('#list-close').addEventListener('click', () => { $('#list').hidden = true; state.list.open = false; });
+$('#btn-new').addEventListener('click', newDossier);
+document.querySelectorAll('#list [role=tab]').forEach((b) => b.addEventListener('click', () => openList(b.dataset.tab)));
+$('#filters').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { state.list.filter = b.dataset.f; renderList(); } });
+$('#rows').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-kind]'); if (!b) return;
+  const { kind, id } = b.dataset;
+  select(kind, id, { focus: kind === 'stock' || objects.has(`${kind}:${id}`) });
+});
+document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => { const v = VIEWS[b.dataset.view]; flyTo(v.pos, v.target, true); setViewButtons(b.dataset.view); }));
+$('#btn-details').addEventListener('click', (e) => { state.detailed = !state.detailed; e.currentTarget.setAttribute('aria-pressed', String(state.detailed)); applySelection(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#panel').hidden) closePanel(); });
+
+/* ================= Démarrage ================= */
+async function connectDb() {
+  const db = await window.claude.use('db');
+  if (!db) { setMode('demo'); return; }
+  state.db = db; setMode('db');
+  for (const kind of ['stock', 'dossiers']) {
+    db.collection(kind).onSnapshot((snap) => {
+      if (snap.empty) { if (!snap.metadata.fromCache) state.dbEmpty[kind] = true; return; }
+      state.dbEmpty[kind] = false;
+      state[kind] = snap.docs.map((d) => (kind === 'stock' ? normStock : normDossier)({ ...d.data(), id: d.id }));
+      const sel = state.selected;
+      render();
+      if (sel && !state.draft && $('#panel').hidden === false && document.activeElement?.closest?.('#panel') == null) openPanel();
+    }, (err) => toast('Synchronisation impossible (' + (err?.code || 'erreur') + '). Les données affichées peuvent être anciennes.', true));
+  }
+}
+
+async function boot() {
+  initScene();
+  const [s, d] = await Promise.all([loadCSV('data/stock.csv'), loadCSV('data/dossiers.csv')]);
+  state.stock = s.map(normStock);
+  state.dossiers = d.map(normDossier);
+
+  if (window.claude?.use) {
+    setMode('pending'); render(); connectDb();
+  } else {
+    const ok = await fetch('api/health', { cache: 'no-store' }).then((r) => r.ok).catch(() => false);
+    if (ok) setMode('local');
+    else {
+      setMode('browser');
+      for (const kind of ['stock', 'dossiers']) {
+        try { const saved = JSON.parse(localStorage.getItem('crm3d:' + kind) || 'null'); if (Array.isArray(saved) && saved.length) state[kind] = saved.map(kind === 'stock' ? normStock : normDossier); } catch {}
+      }
+    }
+    render();
+  }
+  if (!state.stock.length && !state.dossiers.length) {
+    $('#loading').hidden = false;
+    $('#loading').textContent = 'Aucune donnée trouvée : ajoutez data/stock.csv et data/dossiers.csv, puis rechargez la page.';
+  }
+}
+boot();
+</script>

@@ -1,0 +1,17 @@
+id,numero,immat,vehicule,client,telephone,travaux,poste,etape,date_entree,date_prevue,date_livraison,montant,notes
+d01,OR-2611-041,4821 LKP,Seat León 1.5 TSI (2020),Marta Ferrer,612 448 901,"Vidange, filtres, plaquettes AV",Pont 1,En cours,2026-11-05,2026-11-07,,312.40,
+d02,OR-2611-042,7390 MBF,Peugeot 308 1.5 BlueHDi (2019),Javier Navarro,634 201 557,Distribution + pompe à eau,Pont 2,En cours,2026-11-03,2026-11-06,,845.00,Kit distribution en rupture : commande Dayco passée le 04/11
+d03,OR-2611-043,2156 KXT,Renault Clio V (2021),Lucía Martínez,655 873 120,Diagnostic voyant moteur,Diagnostic,En cours,2026-11-06,2026-11-08,,65.00,
+d04,OR-2611-044,9043 HJD,Toyota Corolla Hybrid (2022),Andrés Soler,678 902 344,Révision 60 000 km,Pont 3,En cours,2026-11-06,2026-11-09,,289.90,
+d05,OR-2611-045,5518 LBC,Volkswagen Golf VII (2018),Carmen Ruiz,622 117 908,Pare-chocs AR + peinture,Carrosserie,En cours,2026-11-02,2026-11-05,,1180.00,Attente séchage peinture
+d06,OR-2611-046,3327 MCS,Kia Sportage (2023),Pablo Giménez,611 563 270,Disques + plaquettes AV,Réception,Reçu,2026-11-07,2026-11-10,,498.00,
+d07,OR-2611-047,8862 JZN,Citroën C3 (2017),Elena Vidal,699 340 112,Batterie + contrôle charge,Réception,Reçu,2026-11-07,2026-11-07,,189.00,
+d08,OR-2611-048,1405 LHG,Dacia Sandero (2020),Hugo Castell,640 785 213,Recharge climatisation,Réception,Reçu,2026-11-04,2026-11-06,,95.00,Client injoignable pour valider le devis
+d09,OR-2611-038,6670 KTR,Ford Focus 1.0 EcoBoost (2019),Sofía Pérez,687 220 431,Embrayage complet,Parking sortie,Terminé,2026-10-30,2026-11-06,,1240.00,Client prévenu par SMS
+d10,OR-2611-039,2289 LFW,Hyundai Tucson (2021),Raúl Moreno,616 994 027,Pneus x4 + géométrie,Parking sortie,Terminé,2026-11-05,2026-11-07,,612.00,
+d11,OR-2611-031,4402 KPM,Opel Corsa (2018),Inés Llorens,628 451 773,Vidange + filtres,,Livré,2026-10-31,2026-11-03,2026-11-03,214.50,
+d12,OR-2611-032,7781 MDD,BMW Série 1 118i (2022),Daniel Ortega,673 018 659,Disques + plaquettes AR,,Livré,2026-11-02,2026-11-04,2026-11-04,562.80,
+d13,OR-2611-033,0937 LMT,Nissan Qashqai (2020),Alba Romero,604 338 190,Révision + courroie accessoires,,Livré,2026-11-03,2026-11-05,2026-11-05,925.00,
+d14,OR-2611-034,5164 KZB,Mazda CX-3 (2019),Tomás Ibáñez,690 772 405,Diagnostic + capteur ABS,,Livré,2026-11-05,2026-11-06,2026-11-06,348.60,
+d15,OR-2610-027,3019 LGR,Skoda Octavia (2021),Laura Sanz,631 509 846,Révision + plaquettes,,Livré,2026-10-24,2026-10-28,2026-10-28,760.00,
+d16,OR-2610-019,8246 JWS,Seat Ibiza (2016),Marcos Vela,646 125 380,Vidange + ampoules,,Livré,2026-10-22,2026-10-24,2026-10-24,430.00,
