@@ -1,0 +1,45 @@
+feature,area,priority,original,clone,notes
+Fusionner plusieurs PDF,organiser,must,yes,yes,Atelier PDF > Fusionner
+Réorganiser tourner supprimer des pages,organiser,must,yes,yes,Atelier PDF > Organiser les pages
+Extraire ou découper des pages,organiser,must,yes,yes,Atelier PDF > Découper (plages ou une page par fichier)
+Compresser un PDF,organiser,must,yes,partial,les pages deviennent des images : texte non sélectionnable après compression
+Modifier le texte existant,modifier,must,yes,partial,texte réécrit par-dessus en Helvetica : police d'origine non conservée et pas de remise en page du paragraphe
+Ajouter du texte,modifier,must,yes,yes,
+Surligner,annoter,must,yes,yes,
+Signer soi-même (dessin ou nom tapé),signer,must,yes,yes,avec date et certificat de preuve
+Faire signer à distance par lien,signer,must,yes,partial,construit et testé en local ; pas encore en ligne (compte Cloudflare à créer)
+Journal de preuve de la signature,signer,must,yes,yes,IP pays appareil heures serveur consentement empreintes SHA-256
+Notifications email (envoi du lien et copie signée),signer,must,yes,partial,construit et testé ; nécessite un nom de domaine et un compte Resend ou Brevo
+Remplir un formulaire PDF,formulaires,must,yes,partial,formulaires AcroForm oui ; formulaires XFA non
+Reconnaissance de texte d'un scan (OCR),convertir,must,yes,partial,texte récupéré en TXT Word ou PDF ; pas de couche de texte invisible ajoutée au PDF scanné
+PDF vers Word,convertir,must,yes,partial,texte et titres seulement : ni images ni tableaux ni mise en page exacte
+Word vers PDF,convertir,must,yes,partial,titres paragraphes listes ; tableaux en texte ; ni images ni polices d'origine
+Images ou photos vers PDF,convertir,must,yes,yes,
+Scanner un papier avec le téléphone,convertir,must,yes,partial,photo + effet scan ; pas de détection automatique des bords ni de recadrage
+PDF vers images,convertir,must,yes,yes,PNG ou JPG en ZIP
+Filigrane,modifier,should,yes,yes,texte ou logo
+Numéros de page,modifier,should,yes,yes,
+En-têtes et pieds de page,modifier,should,yes,partial,pied de page seulement
+Masquer définitivement (caviardage),protéger,should,yes,partial,boîte noire puis Compresser pour effacer le texte dessous : deux étapes manuelles
+Protéger par mot de passe,protéger,should,yes,no,
+Signature certifiée (certificat numérique),signer,should,yes,yes,sceau PAdES ; reconnu par Adobe seulement avec un certificat officiel importé (FNMT)
+Plusieurs documents dans un même envoi,signer,should,yes,yes,
+Relances automatiques des signataires,signer,should,yes,no,renvoi manuel seulement
+Vérification d'identité du signataire (code email ou SMS),signer,should,yes,no,
+Notes et commentaires,annoter,should,yes,no,
+Créer un formulaire à remplir (ajout de champs),formulaires,should,yes,no,
+Modèles réutilisables pour les envois à signer,signer,should,yes,no,
+Rendre un scan consultable (texte sélectionnable dans le PDF),convertir,should,yes,no,
+Comparer deux versions d'un PDF,outils,could,yes,no,
+PDF vers Excel ou PowerPoint,convertir,could,yes,no,
+Modifier les images d'un PDF,modifier,could,yes,no,
+Signets et table des matières,organiser,could,yes,no,
+Assistant IA (résumé et questions sur un PDF),outils,could,yes,no,
+Numérotation Bates,juridique,could,yes,no,
+Export PDF/A pour l'archivage,outils,could,yes,no,
+Vérification d'accessibilité,outils,could,yes,no,
+Stockage et partage dans le cloud,partage,could,yes,partial,documents à signer stockés côté serveur ; pas d'espace de fichiers général
+Applications mobiles natives,plateformes,could,yes,partial,site web adapté au téléphone ; pas d'application installable
+Cachet visuel de l'entreprise,signer,should,no,yes,ajouté par nous : tampon rond avec nom CIF ville et date
+Lecture obligatoire de toutes les pages avant de signer,signer,should,no,yes,ajouté par nous
+Fichiers traités sur l'appareil sans envoi,confidentialité,should,no,yes,ajouté par nous (outils PDF)
