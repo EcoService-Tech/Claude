@@ -26,7 +26,8 @@ Ensuite, chaque modification poussée sur `master` remet le site à jour.
 ## Utilisation
 
 - `/admin.html` : réglages de l'entreprise (cachet, logo, sceau), nouvelles demandes, suivi, finalisation.
-- `/s/<lien>` : page de signature envoyée à chaque signataire.
+- `/s/<lien>` : page de signature envoyée à chaque signataire (signature dessinée, ou par certificat électronique via AutoFirma ; refus possible avec motif).
+- `/resiliation` : page publique où les membres demandent une résiliation ou une suspension (code email, signature, accusé de réception).
 - `/outils.html` : outils PDF.
 
 ## Développement local

@@ -45,12 +45,12 @@ Lecture obligatoire de toutes les pages avant de signer,signer,should,no,yes,ajo
 Fichiers traités sur l'appareil sans envoi,confidentialité,should,no,yes,ajouté par nous (outils PDF)
 Résiliation en un clic et sans engagement,abonnement,must,no,no,angle A ; 96 avis sur la résiliation difficile
 Prix unique sans fonctions de base bridées,abonnement,must,no,no,228 avis sur le prix
-Modèles de dossier d'adhésion (contrat règlement RGPD santé décharge),salle de sport,must,no,no,décharges : 4 avis + métier
-"Résiliation ou suspension d'adhésion par le membre, signée",salle de sport,should,no,no,environ 6 avis Glofox
+Modèles de dossier d'adhésion (contrat règlement RGPD santé décharge),salle de sport,must,no,partial,modèles réutilisables à partir de tes propres PDF ; pas de textes types fournis
+"Résiliation ou suspension d'adhésion par le membre, signée",salle de sport,should,no,yes,"page publique /resiliation : code email, signature, accusé de réception horodaté, réponse signée et scellée"
 Pack de signatures à l'unité,abonnement,could,no,no,2 avis DocuSign
-Signature par certificat officiel espagnol (FNMT DNIe) pour les signataires,signer,should,no,no,5 avis ES + HN ; via AutoFirma
-Blocage tant que le dossier d'adhésion n'est pas signé,salle de sport,should,no,no,décharges : 5 avis
-Mode signer ici maintenant (tablette de l'accueil),signer,should,no,no,4 avis Acrobat Sign
-Refuser de signer avec un motif,signer,should,no,no,2 avis DocuSign (mince)
+Signature par certificat officiel espagnol (FNMT DNIe) pour les signataires,signer,should,no,yes,"le client signe avec AutoFirma et dépose le PDF ; signature vérifiée, jointe intacte au document final"
+Blocage tant que le dossier d'adhésion n'est pas signé,salle de sport,should,no,partial,modèles de dossier + écran Accueil qui montre si le dossier est complet ; pas de blocage automatique des réservations (pas de module réservation)
+Mode signer ici maintenant (tablette de l'accueil),signer,should,no,yes,"signataire « sur place » : aucun email, pas de code, bouton Faire signer sur cet appareil"
+Refuser de signer avec un motif,signer,should,no,yes,"motif transmis par email au gérant, inscrit au journal ; finalisation bloquée"
 Champs à remplir par le signataire (date cases),signer,should,no,no,2 avis (mince)
-Export complet des données,partage,could,no,no,1 avis Mindbody (mince) ; argument anti-enfermement
+Export complet des données,partage,could,no,yes,"ZIP : tous les PDF, CSV et JSON"

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Résilier ou suspendre</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Caveat:wght@600&display=swap">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo" id="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 15h6"/></svg></div>
+    <div class="brand"><h1 id="company">Mon adhésion</h1><p>Résilier ou suspendre, en ligne.</p></div>
+  </header>
+  <main id="app" class="stack"></main>
+  <footer>Ta demande est horodatée par le serveur et signée électroniquement. Tu reçois immédiatement un accusé de réception par email.</footer>
+</div>
+<script src="/vendor/pdf-lib.min.js"></script>
+<script src="/vendor/pdf.min.js"></script>
+<script src="/common.js"></script>
+<script>
+const app = $("#app");
+const token = location.pathname.startsWith("/m/") ? location.pathname.split("/").filter(Boolean)[1] : "";
+const TYPES = {resiliation: "résiliation", suspension: "suspension"};
+async function call(path, opts = {}) {
+  const r = await fetch("/api" + path, opts), ct = r.headers.get("content-type") || "";
+  if (!r.ok) throw new Error(ct.includes("json") ? (await r.json()).error : "Erreur de connexion.");
+  return ct.includes("json") ? r.json() : r.arrayBuffer();
+}
+function brand(p) {
+  if (!p) return;
+  if (p.company) { $("#company").textContent = p.company; document.title = "Mon adhésion · " + p.company; }
+  if (p.color) document.documentElement.style.setProperty("--accent", p.color);
+  if (p.hasLogo) $("#logo").replaceChildren(h("img", {src: "/api/logo", alt: ""}));
+}
+const today = () => new Date().toISOString().slice(0, 10);
+
+async function statusView() {
+  try {
+    const m = await call("/m/" + token); brand(m.profile);
+    const label = TYPES[m.type], STATE = {received: "En cours de traitement", accepted: "Acceptée", refused: "Refusée"};
+    app.replaceChildren(h("section", {class: "panel"},
+      h("h2", {}, `Ta demande de ${label}`),
+      h("span", {class: "pill " + (m.status === "received" ? "waiting" : m.status === "accepted" ? "signed" : "cancelled")}, STATE[m.status]),
+      h("ul", {class: "timeline"},
+        h("li", {}, h("span", {class: "lbl", style: "min-width:120px"}, "Reçue le"), h("span", {}, fmtDateLong(m.createdAt))),
+        h("li", {}, h("span", {class: "lbl", style: "min-width:120px"}, m.type === "suspension" ? "Période" : "À partir du"), h("span", {}, m.type === "suspension" ? `du ${m.startDate} au ${m.endDate}` : m.startDate)),
+        m.decidedAt ? h("li", {}, h("span", {class: "lbl", style: "min-width:120px"}, "Réponse le"), h("span", {}, fmtDateLong(m.decidedAt))) : null,
+        m.decisionNote ? h("li", {}, h("span", {class: "lbl", style: "min-width:120px"}, "Message"), h("span", {}, m.decisionNote)) : null),
+      m.status !== "received" ? h("button", {class: "btn", type: "button", onclick: async () => download(`demande-${m.type}.pdf`, await call(`/m/${token}/pdf`))}, "Télécharger le document signé") : h("p", {class: "note"}, "Tu recevras la réponse par email."),
+      m.pdfHash ? h("p", {class: "hash"}, "Empreinte SHA-256 : " + m.pdfHash) : null));
+  } catch (e) { app.replaceChildren(h("section", {class: "panel"}, h("h2", {}, "Demande introuvable"), h("p", {style: "margin:0"}, e.message))); }
+}
+
+function formView() {
+  let type = "resiliation", consentAt = null;
+  const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const f = (id, label, attrs = {}) => { const el = h("input", {type: "text", id, ...attrs}); return [el, h("div", {class: "field"}, h("label", {for: id}, label), el)]; };
+  const [nameIn, nameF] = f("mname", "Nom complet", {autocomplete: "name"});
+  const [emailIn, emailF] = f("memail", "Email (celui de ton adhésion)", {type: "email", inputmode: "email", autocomplete: "email"});
+  const [phoneIn, phoneF] = f("mphone", "Téléphone (facultatif)", {type: "tel", autocomplete: "tel"});
+  const [refIn, refF] = f("mref", "N° de membre (si tu le connais)");
+  const [startIn, startF] = f("mstart", "Date souhaitée", {type: "date", min: today(), value: today()});
+  const [endIn, endF] = f("mend", "Date de reprise", {type: "date", min: today()});
+  endF.hidden = true;
+  const reasonIn = h("textarea", {id: "mreason", placeholder: "Facultatif", style: "min-height:70px;font-family:var(--body)"});
+  const consent = h("input", {type: "checkbox", id: "mconsent"});
+  const consentLbl = h("span", {});
+  const setConsent = () => consentLbl.textContent = `Je demande la ${TYPES[type]} de mon adhésion aux dates indiquées. Je confirme être le titulaire de l'adhésion et j'accepte de signer cette demande électroniquement.`;
+  consent.onchange = () => { consentAt = consent.checked ? new Date().toISOString() : null; ready(); };
+  const pad = signaturePad({nameHint: () => nameIn.value}); pad.onchange = () => ready();
+  const codeIn = h("input", {type: "text", id: "mcode", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "6", placeholder: "6 chiffres", style: "max-width:160px;letter-spacing:4px;font-family:var(--mono)"});
+  const codeSt = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const sendCode = h("button", {class: "btn ghost small", type: "button"}, "Recevoir mon code par email");
+  sendCode.onclick = async () => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn.value.trim())) return setStatus(codeSt, "Indique d'abord ton email.", "err");
+    sendCode.disabled = true; setStatus(codeSt, "Envoi du code…");
+    try { await call("/m/code", {method: "POST", body: JSON.stringify({email: emailIn.value.trim(), name: nameIn.value.trim()})}); setStatus(codeSt, "Code envoyé. Pense à regarder tes spams.", "ok"); codeIn.focus(); }
+    catch (e) { setStatus(codeSt, e.message, "err"); }
+    setTimeout(() => sendCode.disabled = false, 45000);
+  };
+  codeIn.oninput = () => { codeIn.value = codeIn.value.replace(/\D/g, "").slice(0, 6); ready(); };
+  const go = h("button", {class: "btn", type: "button", disabled: true}, "Envoyer ma demande signée");
+  function ready() { go.disabled = !(nameIn.value.trim() && emailIn.value.trim() && startIn.value && (type !== "suspension" || endIn.value > startIn.value) && consent.checked && pad.png && codeIn.value.length === 6); }
+  [nameIn, emailIn, startIn, endIn].forEach(el => el.addEventListener("input", ready));
+  go.onclick = async () => {
+    go.disabled = true; setStatus(st, "Envoi de ta demande…");
+    try {
+      const r = await call("/m/request", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({type, name: nameIn.value.trim(), email: emailIn.value.trim(), phone: phoneIn.value.trim(), memberRef: refIn.value.trim(),
+        startDate: startIn.value, endDate: type === "suspension" ? endIn.value : null, reason: reasonIn.value.trim(), consent: true, consentText: consentLbl.textContent, consentAt, method: pad.method, signature: pad.png, code: codeIn.value})});
+      app.replaceChildren(h("section", {class: "panel done"}, h("div", {class: "big-ok"}, "Demande envoyée"),
+        h("p", {style: "margin:0"}, `Ta demande de ${TYPES[type]} a été reçue le ${fmtDateLong(r.receivedAt)}. Un accusé de réception vient de t'être envoyé par email : conserve-le.`),
+        h("a", {class: "btn ghost", href: r.link}, "Suivre ma demande")));
+    } catch (e) { setStatus(st, e.message, "err"); go.disabled = false; }
+  };
+  const typeSeg = seg([["resiliation", "Résilier"], ["suspension", "Suspendre"]], type, v => { type = v; endF.hidden = v !== "suspension"; startF.querySelector("label").textContent = v === "suspension" ? "Début de la suspension" : "Date souhaitée"; setConsent(); ready(); });
+  setConsent();
+  app.replaceChildren(h("section", {class: "panel"},
+    h("h2", {}, "Ta demande"),
+    h("div", {class: "field"}, h("span", {class: "lbl"}, "Tu veux :"), typeSeg),
+    h("div", {class: "fields"}, nameF, emailF, phoneF, refF, startF, endF),
+    h("div", {class: "field"}, h("label", {for: "mreason"}, "Motif (facultatif)"), reasonIn),
+    h("h2", {}, "Ta signature"), pad.el,
+    h("label", {class: "check", for: "mconsent"}, consent, consentLbl),
+    h("div", {class: "field", style: "gap:8px"}, h("label", {for: "mcode"}, "Pour confirmer que c'est bien toi, reçois un code à l'email indiqué et saisis-le ici."), h("div", {class: "row"}, sendCode, codeIn), codeSt),
+    h("div", {class: "row"}, go), st,
+    h("p", {class: "note"}, "Les conditions de ton contrat (préavis, dernière mensualité…) s'appliquent. L'établissement te répond par email avec un document signé.")));
+}
+
+(async () => {
+  if (token) return statusView();
+  try { brand(await call("/profile")); } catch {}
+  formView();
+})();
+</script>
+</body>
+</html>

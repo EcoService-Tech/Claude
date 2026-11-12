@@ -21,13 +21,14 @@
 <script src="/vendor/pdf-lib.min.js"></script>
 <script src="/vendor/pdf.min.js"></script>
 <script src="/vendor/seal.js"></script>
+<script src="/vendor/jszip.min.js"></script>
 <script src="/common.js"></script>
 <script>
 const app = $("#app");
 let TOKEN = store.get("adm") || "";
 let settings = {profile: {}, seal: null};
 let logoImg = null;
-const EVENTS = {email_sent: "Email envoyé", email_failed: "Échec d'envoi d'email", created: "Demande créée", opened: "Lien ouvert", read: "Document lu", signed: "Signé", finalized: "Finalisé et archivé", cancelled: "Annulé", downloaded_final: "Copie finale téléchargée"};
+const EVENTS = {declined: "Refus de signer", email_sent: "Email envoyé", email_failed: "Échec d'envoi d'email", created: "Demande créée", opened: "Lien ouvert", read: "Document lu", signed: "Signé", finalized: "Finalisé et archivé", cancelled: "Annulé", downloaded_final: "Copie finale téléchargée"};
 
 async function api(path, opts = {}) {
   const r = await fetch("/api/admin" + path, {...opts, headers: {authorization: "Bearer " + TOKEN, ...(opts.headers || {})}});
@@ -62,12 +63,12 @@ async function loadSettings() {
   if (p.hasLogo) { try { logoImg = await loadImage("/api/logo?t=" + Date.now()); $("#logo").replaceChildren(h("img", {src: logoImg.src, alt: ""})); } catch {} }
 }
 
-const TABS = [["docs", "Documents"], ["new", "Nouvelle demande"], ["settings", "Mon entreprise"]];
+const TABS = [["reception", "Accueil"], ["docs", "Documents"], ["new", "Nouvelle demande"], ["members", "Résiliations"], ["settings", "Mon entreprise"]];
 function tabs(active) {
   $("#tabs").hidden = false; $("#logout").hidden = false;
   $("#tabs").replaceChildren(...TABS.map(([id, l]) => h("button", {role: "tab", "aria-selected": id === active, type: "button", onclick: () => show(id)}, l)));
 }
-function show(id, arg) { tabs(id); ({docs: viewDocs, new: viewNew, settings: viewSettings, detail: viewDetail})[id](arg); window.scrollTo(0, 0); }
+function show(id, arg) { tabs(id); ({reception: viewReception, docs: viewDocs, new: viewNew, members: viewMembers, settings: viewSettings, detail: viewDetail})[id](arg); window.scrollTo(0, 0); }
 async function start() {
   try { await loadSettings(); } catch { return; }
   show(settings.profile?.company ? "docs" : "settings");
@@ -94,19 +95,23 @@ async function viewDetail(id) {
   let d; try { d = await api("/requests/" + id); } catch (e) { return app.replaceChildren(h("p", {class: "status err"}, e.message)); }
   const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
   const allSigned = d.signers.every(s => s.status === "signed");
+  const declined = d.signers.filter(s => s.status === "declined");
   const shareText = s => `Bonjour ${s.name}, merci de signer « ${d.title} » ici : ${s.link}`;
   const copy = async (text, label) => { try { await navigator.clipboard.writeText(text); setStatus(st, label + " copié.", "ok"); } catch { setStatus(st, "Copie impossible : sélectionne le lien à la main.", "err"); } };
   const waNumber = p => String(p || "").replace(/[^\d]/g, "").replace(/^00/, "");
   const signerCard = s => h("div", {class: "signer"},
-    h("div", {class: "row"}, h("b", {style: "flex:1"}, s.name + (s.role ? ` · ${s.role}` : "")), h("span", {class: "pill " + s.status}, s.status === "signed" ? "Signé" : s.first_opened_at ? "Ouvert" : "Pas encore ouvert")),
-    s.status === "signed" ? h("span", {class: "lbl"}, `Signé le ${fmtDate(s.signed_at)} · ${s.country || "?"}${s.city ? ", " + s.city : ""}`) : null,
+    h("div", {class: "row"}, h("b", {style: "flex:1"}, s.name + (s.role ? ` · ${s.role}` : "")), h("span", {class: "pill " + s.status}, s.status === "signed" ? "Signé" : s.status === "declined" ? "Refusé" : s.first_opened_at ? "Ouvert" : "Pas encore ouvert")),
+    s.status === "signed" ? h("span", {class: "lbl"}, `Signé le ${fmtDate(s.signed_at)} · ${s.country || "?"}${s.city ? ", " + s.city : ""}${s.method === "certificate" ? " · certificat électronique" : s.onsite ? " · sur place" : ""}`) : null,
+    s.method === "certificate" && s.cert_info ? h("span", {class: "lbl"}, (ci => `Certificat de ${ci.name}${ci.idNumber ? " (" + ci.idNumber + ")" : ""}, émis par ${ci.issuer}`)(JSON.parse(s.cert_info))) : null,
+    s.status === "declined" ? h("p", {class: "note", style: "border-left-color:var(--danger)"}, `Refusé le ${fmtDate(s.declined_at)} : « ${s.decline_reason} »`) : null,
     s.email ? h("span", {class: "lbl"}, mailState(s)) : null,
-    d.status === "pending" && s.status !== "signed" ? h("div", {class: "field"},
+    d.status === "pending" && s.status === "waiting" ? h("div", {class: "field"},
       h("span", {class: "link"}, s.link),
       h("div", {class: "row"},
-        h("a", {class: "btn small", href: `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(shareText(s))}`, target: "_blank", rel: "noopener"}, "Envoyer par WhatsApp"),
-        s.email && settings.email?.configured ? resend(s) : null,
-        s.email && !settings.email?.configured ? h("a", {class: "btn ghost small", href: `mailto:${s.email}?subject=${encodeURIComponent("Document à signer : " + d.title)}&body=${encodeURIComponent(shareText(s))}`}, "Par email") : null,
+        h("a", {class: "btn small", href: s.link, target: "_blank", rel: "noopener"}, "Faire signer sur cet appareil"),
+        s.onsite ? null : h("a", {class: "btn ghost small", href: `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(shareText(s))}`, target: "_blank", rel: "noopener"}, "Envoyer par WhatsApp"),
+        s.email && !s.onsite && settings.email?.configured ? resend(s) : null,
+        s.email && !s.onsite && !settings.email?.configured ? h("a", {class: "btn ghost small", href: `mailto:${s.email}?subject=${encodeURIComponent("Document à signer : " + d.title)}&body=${encodeURIComponent(shareText(s))}`}, "Par email") : null,
         h("button", {class: "btn ghost small", type: "button", onclick: () => copy(s.link, "Lien")}, "Copier le lien"))) : null,
     d.status === "final" ? h("div", {class: "row"}, s.email && settings.email?.configured ? resend(s) : null,
       h("a", {class: "btn ghost small", href: `https://wa.me/${waNumber(s.phone)}?text=${encodeURIComponent(`Bonjour ${s.name}, le document « ${d.title} » est signé par tous. Ta copie : ${s.link}`)}`, target: "_blank", rel: "noopener"}, "Envoyer sa copie par WhatsApp")) : null);
@@ -130,6 +135,7 @@ async function viewDetail(id) {
   app.replaceChildren(h("section", {class: "panel"},
     h("div", {class: "row"}, h("button", {class: "icon-btn", type: "button", "aria-label": "Retour", onclick: () => show("docs")}, "←"), h("h2", {style: "flex:1"}, d.title)),
     d.status === "pending" && !allSigned ? h("p", {class: "note"}, settings.email?.configured ? "Chaque personne a reçu son lien personnel par email. Tu peux aussi l'envoyer par WhatsApp. Tu recevras un email à chaque signature." : "Envoie à chaque personne son propre lien. Il est personnel : ne le transfère pas à quelqu'un d'autre.") : null,
+    declined.length ? h("p", {class: "note", style: "border-left-color:var(--danger)"}, "Un signataire a refusé : ce document ne peut pas être finalisé. Corrige-le si besoin et crée une nouvelle demande, puis annule celle-ci.") : null,
     d.status === "pending" && allSigned ? h("p", {class: "note"}, "Tout le monde a signé. Finalise pour créer le PDF définitif avec le cachet, le certificat de preuve et le sceau.") : null,
     d.documents?.length > 1 ? h("div", {class: "field"}, h("h3", {}, "Documents du dossier"), h("ul", {class: "timeline"}, d.documents.map((x, i) => h("li", {}, h("span", {}, `${i + 1}. ${x.name} · pages ${x.from}–${x.to}`))))) : null,
     h("div", {class: "stack", style: "gap:10px"}, d.signers.map(signerCard)),
@@ -165,7 +171,22 @@ async function finalize(d, st) {
     const doc = await PDFDocument.load(orig, {ignoreEncryption: true});
     const F = await doc.embedFont(StandardFonts.Helvetica), B = await doc.embedFont(StandardFonts.HelveticaBold), M = await doc.embedFont(StandardFonts.Courier);
     const pages = doc.getPages(), when = new Date();
+    const certFiles = [];
     for (const s of d.signers) {
+      if (s.method === "certificate") {
+        // le PDF signé avec certificat est joint tel quel (signature intacte) ; on marque l'emplacement
+        const ci = JSON.parse(s.cert_info || "{}"), signedPdf = new Uint8Array(await api(`/certpdf/${s.id}`));
+        const fname = `signe-par-certificat-${(ci.name || s.name).replace(/[^\p{L}\p{N}]+/gu, "-").toLowerCase()}.pdf`;
+        certFiles.push({s, ci, fname, bytes: signedPdf});
+        for (const z of s.placements) {
+          const pg = pages[z.page - 1]; if (!pg) continue;
+          pg.drawRectangle({x: z.x, y: z.y, width: z.w, height: z.h, borderColor: rgb(.137, .251, .788), borderWidth: .8, color: rgb(.94, .95, 1)});
+          pg.drawText("Signé par certificat électronique", {x: z.x + 4, y: z.y + z.h - 12, size: 6.5, font: B, color: rgb(.137, .251, .788)});
+          pg.drawText(safe(ci.name || s.name).slice(0, 40), {x: z.x + 4, y: z.y + z.h - 24, size: 8, font: F, color: rgb(.08, .1, .15)});
+          pg.drawText(safe(`${ci.idNumber || ""} · ${new Date(s.signed_at).toLocaleDateString("fr-FR")}`), {x: z.x + 4, y: z.y + 5, size: 6.5, font: F, color: rgb(.3, .3, .35)});
+        }
+        continue;
+      }
       const img = await doc.embedPng(await api(`/signature/${s.id}`));
       for (const z of s.placements) {
         const pg = pages[z.page - 1]; if (!pg) continue;
@@ -179,7 +200,8 @@ async function finalize(d, st) {
     for (const z of d.stamps) { const pg = pages[z.page - 1]; if (pg) pg.drawImage(stampImg, {x: z.x, y: z.y, width: z.w, height: z.w, opacity: .92}); }
     const total = pages.length;
     pages.forEach((pg, i) => pg.drawText(safe(`Dossier ${d.id} · signé électroniquement · page ${i + 1}/${total}`), {x: 30, y: 10, size: 6, font: F, color: rgb(.5, .5, .55)}));
-    await certificate(doc, d, {F, B, M, stampImg, sealed: !!p12, when});
+    await certificate(doc, d, {F, B, M, stampImg, sealed: !!p12, when, certFiles});
+    for (const c of certFiles) await doc.attach(c.bytes, c.fname, {mimeType: "application/pdf", description: safe(`Document signé par certificat électronique par ${c.ci.name}`), creationDate: new Date(c.s.signed_at)});
     doc.setSubject(safe(`Signé électroniquement · dossier ${d.id}`));
     doc.setKeywords(["signature-electronique", "dossier:" + d.id, "sha256-original:" + d.original_hash]);
     doc.setProducer(safe(settings.profile.company || "Espace signature"));
@@ -191,7 +213,7 @@ async function finalize(d, st) {
     setStatus($(".panel .status"), (p12 ? "Document finalisé et scellé." : "Document finalisé (sans sceau : configure-le dans « Mon entreprise »).") + (settings.email?.configured ? " Chaque signataire reçoit sa copie par email." : ""), "ok");
   } catch (e) { setStatus(st, e.message || "La finalisation a échoué.", "err"); }
 }
-async function certificate(doc, d, {F, B, M, stampImg, sealed, when}) {
+async function certificate(doc, d, {F, B, M, stampImg, sealed, when, certFiles = []}) {
   const W = 595.28, H = 841.89, L = 46, maxW = W - 2 * L, ink = rgb(.08, .1, .15), mut = rgb(.38, .42, .5), prof = settings.profile;
   let p, y;
   const page = () => { p = doc.addPage([W, H]); p.drawRectangle({x: 0, y: H - 34, width: W, height: 34, color: rgb(.137, .251, .788)}); p.drawText("CERTIFICAT DE SIGNATURE ELECTRONIQUE", {x: L, y: H - 22, size: 11, font: B, color: rgb(1, 1, 1)}); y = H - 64; };
@@ -224,11 +246,15 @@ async function certificate(doc, d, {F, B, M, stampImg, sealed, when}) {
     line(`Contact utilisé pour l'envoi du lien personnel : ${[s.phone, s.email].filter(Boolean).join(" · ") || "non renseigné"}`);
     line(`Lien ouvert pour la première fois le : ${fmtDateLong(s.first_opened_at)}`);
     if (rd) line(`Lecture : ${rd.pages || "?"} page(s) affichée(s), ${rd.seconds || "?"} secondes avant de signer.`);
-    line(s.identity_verified_at ? `Identité vérifiée par code à usage unique envoyé à ${s.email}, saisi le : ${fmtDateLong(s.identity_verified_at)}` : "Identité : lien personnel envoyé à l'adresse ou au numéro ci-dessus (sans code de vérification).");
+    const cf = certFiles.find(c => c.s.id === s.id);
+    if (cf) {
+      line(`Identité : signature avec certificat électronique de ${cf.ci.name}${cf.ci.idNumber ? " (" + cf.ci.idNumber + ")" : ""}, émis par ${cf.ci.issuer}, valable jusqu'au ${fmtDate(cf.ci.notAfter)}.`, {f: B, size: 9.5});
+      line(`Signature cryptographique vérifiée à la réception (${cf.ci.algorithm}). Le document signé par certificat est joint à ce PDF, intact : « ${cf.fname} » (SHA-256 ${cf.ci.sha256}).`, {size: 8.5, color: mut});
+    } else line(s.identity_verified_at && !s.onsite ? `Identité vérifiée par code à usage unique envoyé à ${s.email}, saisi le : ${fmtDateLong(s.identity_verified_at)}` : s.onsite ? "Signature sur place, sur l'appareil de l'établissement, en présence de son personnel." : "Identité : lien personnel envoyé à l'adresse ou au numéro ci-dessus (sans code de vérification).");
     line(`Consentement coché le : ${fmtDateLong(s.consent_at)}`);
     line(`Signature enregistrée par le serveur le : ${fmtDateLong(s.signed_at)}`, {f: B, size: 9.5});
     line(`Adresse IP : ${s.ip || "?"} · Localisation approximative : ${[s.city, s.country].filter(Boolean).join(", ") || "?"}`);
-    line(`Mode : signature ${s.method === "type" ? "écrite au clavier" : "dessinée à la main sur l'écran"}. Appareil : ${(s.user_agent || "?").slice(0, 150)}`, {size: 8.5, color: mut});
+    line(`Mode : signature ${s.method === "certificate" ? "par certificat électronique (AutoFirma)" : s.method === "type" ? "écrite au clavier" : "dessinée à la main sur l'écran"}. Appareil : ${(s.user_agent || "?").slice(0, 150)}`, {size: 8.5, color: mut});
     if (sd?.signatureSha256) line(`Empreinte SHA-256 de l'image de signature : ${sd.signatureSha256}`, {f: M, size: 7.5, color: mut});
     line(`Texte accepté : « ${s.consent_text || ""} »`, {size: 8.5, color: mut, gap: 4});
   }
@@ -247,9 +273,9 @@ async function certificate(doc, d, {F, B, M, stampImg, sealed, when}) {
 
 /* ---------- nouvelle demande ---------- */
 function viewNew() {
-  let buf = null, target = 0, pageSizes = [];
+  let buf = null, target = 0, pageSizes = [], templateId = null;
   const docs = [];  // {name, file, bytes, pages, sha256}
-  const signers = [{name: "", phone: "", email: "", role: "", placements: []}];
+  const signers = [{name: "", phone: "", email: "", role: "", onsite: false, placements: []}];
   const stamps = [];
   const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
   const titleIn = h("input", {type: "text", id: "title", placeholder: "ex. Inscription — Marta López"});
@@ -267,8 +293,8 @@ function viewNew() {
   function drawDocs() {
     docList.replaceChildren(...docs.map((d, i) => h("div", {class: "item", style: "cursor:default"},
       h("div", {class: "grow"}, h("b", {}, `${i + 1}. ${d.name}`), h("span", {}, `${d.pages} page${d.pages > 1 ? "s" : ""} · ${fmtSize(d.bytes.byteLength)}`)),
-      h("button", {class: "icon-btn", type: "button", "aria-label": "Monter", disabled: i === 0, onclick: () => { [docs[i - 1], docs[i]] = [docs[i], docs[i - 1]]; rebuild(); }}, "↑"),
-      h("button", {class: "icon-btn", type: "button", "aria-label": "Retirer", onclick: () => { docs.splice(i, 1); rebuild(); }}, "×"))));
+      templateId ? null : h("button", {class: "icon-btn", type: "button", "aria-label": "Monter", disabled: i === 0, onclick: () => { [docs[i - 1], docs[i]] = [docs[i], docs[i - 1]]; rebuild(); }}, "↑"),
+      templateId ? null : h("button", {class: "icon-btn", type: "button", "aria-label": "Retirer", onclick: () => { docs.splice(i, 1); rebuild(); }}, "×"))));
   }
   async function rebuild() {
     // tout changement de documents efface les emplacements, car les numéros de page bougent
@@ -294,8 +320,9 @@ function viewNew() {
           h("div", {class: "field"}, h("label", {for: `s${i}name`}, "Nom complet"), inp("name", "Prénom Nom")),
           h("div", {class: "field"}, h("label", {for: `s${i}phone`}, "WhatsApp"), inp("phone", "+34 600 000 000", "tel")),
           h("div", {class: "field"}, h("label", {for: `s${i}email`}, settings.email?.configured ? "Email (le lien part automatiquement)" : "Email"), inp("email", "nom@exemple.com", "email")),
-          h("div", {class: "field"}, h("label", {for: `s${i}role`}, "Rôle"), inp("role", "Membre, Coach…"))));
-    }), h("div", {class: "row"}, h("button", {class: "btn ghost small", type: "button", onclick: () => { signers.push({name: "", phone: "", email: "", role: "", placements: []}); drawSigners(); }}, "+ Ajouter un signataire")));
+          h("div", {class: "field"}, h("label", {for: `s${i}role`}, "Rôle"), inp("role", "Membre, Coach…"))),
+        h("label", {class: "check"}, (() => { const c = h("input", {type: "checkbox", checked: s.onsite}); c.onchange = () => { s.onsite = c.checked; check(); }; return c; })(), h("span", {}, "Signe sur place, sur la tablette de l'accueil (aucun email ne lui est envoyé)")));
+    }), h("div", {class: "row"}, h("button", {class: "btn ghost small", type: "button", onclick: () => { signers.push({name: "", phone: "", email: "", role: "", onsite: false, placements: []}); drawSigners(); }}, "+ Ajouter un signataire")));
     drawTargets(); check();
   }
   function drawTargets() {
@@ -328,9 +355,9 @@ function viewNew() {
     viewer.go(ranges()[0].to); check();
     setStatus(st, "Signatures placées en bas de la dernière page de chaque document. Vérifie qu'elles ne cachent pas de texte : touche une zone pour la retirer et replace-la à la main.");
   };
-  const emailOk = s => !settings.email?.configured || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email.trim());
+  const emailOk = s => s.onsite || !settings.email?.configured || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email.trim());
   function check() {
-    auto.disabled = !buf;
+    auto.disabled = !buf; saveTpl.disabled = !buf || templateId || !signers.every(s => s.placements.length);
     const covered = s => ranges().every(r => s.placements.some(z => z.page >= r.from && z.page <= r.to));
     create.disabled = !(buf && titleIn.value.trim() && signers.every(s => s.name.trim() && covered(s) && emailOk(s)));
     if (buf && signers.some(s => s.name.trim() && s.placements.length && !covered(s))) setStatus(st, "Chaque signataire doit avoir au moins une signature dans chaque document.", "err");
@@ -349,23 +376,201 @@ function viewNew() {
   create.onclick = async () => {
     create.disabled = true; setStatus(st, "Envoi du dossier…");
     try {
-      const fileName = docs.length === 1 ? docs[0].file.name : (titleIn.value.trim().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").toLowerCase() || "dossier") + ".pdf";
-      const r = await api("/requests", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({title: titleIn.value.trim(), fileName, signers, stamps, documents: ranges()})});
+      const fileName = docs.length === 1 && docs[0].file ? docs[0].file.name : (titleIn.value.trim().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").toLowerCase() || "dossier") + ".pdf";
+      const r = await api("/requests", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({title: titleIn.value.trim(), fileName, signers, stamps, documents: ranges(), templateId})});
       await api(`/requests/${r.id}/original`, {method: "PUT", headers: {"content-type": "application/pdf"}, body: buf});
       tabs("docs"); viewDetail(r.id);
     } catch (e) { setStatus(st, e.message, "err"); create.disabled = false; }
   };
+  // ---- modèles de dossier
+  const tplBox = h("div", {class: "row"});
+  const saveTpl = h("button", {class: "btn ghost small", type: "button", disabled: true}, "Enregistrer comme modèle");
+  const tplName = h("input", {type: "text", id: "tplName", placeholder: "ex. Dossier d'adhésion"});
+  const tplSave = h("div", {class: "row", hidden: true}, h("div", {class: "field", style: "flex:1"}, h("label", {for: "tplName"}, "Nom du modèle"), tplName),
+    h("button", {class: "btn small", type: "button", onclick: async e => {
+      if (!tplName.value.trim()) return setStatus(st, "Donne un nom au modèle.", "err");
+      e.target.disabled = true;
+      try {
+        const r = await api("/templates", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({name: tplName.value.trim(), title: titleIn.value.trim() || tplName.value.trim(),
+          fileName: docs.length === 1 && docs[0].file ? docs[0].file.name : "dossier.pdf", documents: ranges(), stamps, slots: signers.map(x => ({role: x.role || x.name, onsite: x.onsite, placements: x.placements}))})});
+        await api(`/templates/${r.id}/pdf`, {method: "PUT", headers: {"content-type": "application/pdf"}, body: buf});
+        tplSave.hidden = true; setStatus(st, `Modèle « ${tplName.value.trim()} » enregistré. Tu le retrouveras en haut de cet écran.`, "ok"); loadTemplates();
+      } catch (er) { setStatus(st, er.message, "err"); }
+      e.target.disabled = false;
+    }}, "Enregistrer"));
+  saveTpl.onclick = () => { tplSave.hidden = false; tplName.focus(); };
+  async function loadTemplates() {
+    try {
+      const {templates} = await api("/templates");
+      if (!templates.length) { tplBox.replaceChildren(h("span", {class: "lbl"}, "Astuce : après avoir préparé un dossier (contrat, règlement, RGPD…), enregistre-le comme modèle pour le réutiliser en 30 secondes.")); return; }
+      const sel = h("select", {id: "tplSel"}, h("option", {value: ""}, "Partir d'un modèle…"), templates.map(t => h("option", {value: t.id}, t.name)));
+      sel.onchange = () => sel.value && useTemplate(sel.value);
+      tplBox.replaceChildren(h("div", {class: "field", style: "flex:1"}, h("label", {for: "tplSel"}, "Modèle de dossier"), sel),
+        h("button", {class: "btn danger small", type: "button", onclick: async () => { if (!sel.value) return; await api("/templates/" + sel.value, {method: "DELETE"}); loadTemplates(); }}, "Supprimer ce modèle"));
+    } catch {}
+  }
+  async function useTemplate(id) {
+    setStatus(st, "Chargement du modèle…");
+    const t = await api("/templates/" + id), pdf = await api(`/templates/${id}/pdf`);
+    templateId = id; buf = pdf;
+    docs.length = 0; t.data.documents.forEach(x => docs.push({name: x.name, pages: x.to - x.from + 1, sha256: x.sha256, bytes: {byteLength: x.size || 0}}));
+    stamps.length = 0; t.data.stamps.forEach(z => stamps.push(z));
+    signers.length = 0; t.data.slots.forEach(sl => signers.push({name: "", phone: "", email: "", role: sl.role, onsite: !!sl.onsite, placements: sl.placements.map(z => ({...z}))}));
+    titleIn.value = t.data.title + " — ";
+    const js = await openPdf(buf); pageSizes = [];
+    for (let n = 1; n <= js.numPages; n++) { const vp = (await js.getPage(n)).getViewport({scale: 1}); pageSizes.push([vp.width, vp.height]); }
+    drop.hidden = true; drawDocs(); drawSigners(); viewer.el.hidden = false; await viewer.load(js);
+    setStatus(st, `Modèle « ${t.name} » chargé : renseigne seulement le nom et le contact de chaque signataire.`, "ok");
+    titleIn.focus();
+  }
+  const drop = h("label", {class: "drop", for: "pdfIn"}, fileIn, h("b", {}, "Ajoute les PDF à faire signer"), h("small", {}, "un ou plusieurs : contrat, règlement intérieur, consentement RGPD… 20 Mo au total"));
+  loadTemplates();
   viewer.el.hidden = true;
   app.replaceChildren(h("section", {class: "panel"},
     h("h2", {}, "Nouvelle demande de signature"),
-    h("label", {class: "drop", for: "pdfIn"}, fileIn, h("b", {}, "Ajoute les PDF à faire signer"), h("small", {}, "un ou plusieurs : contrat, règlement intérieur, consentement RGPD… 20 Mo au total")),
+    tplBox,
+    drop,
     docList,
     h("div", {class: "field"}, h("label", {for: "title"}, "Titre du dossier"), titleIn),
     h("h3", {}, "Qui doit signer ?"), list,
     h("h3", {}, "Où signer ?"), h("div", {class: "row"}, auto), targets, where, viewer.el,
     h("p", {class: "note"}, "Chaque signataire doit signer chaque document. Touche une zone déjà placée pour la retirer. Le cachet est apposé à la finalisation, avec la date du jour."),
-    h("div", {class: "row"}, create), st));
+    h("div", {class: "row"}, create, saveTpl), tplSave, st));
   drawSigners();
+}
+
+/* ---------- accueil : le dossier de cette personne est-il complet ? ---------- */
+function viewReception() {
+  const q = h("input", {type: "text", id: "q", placeholder: "Nom, email ou téléphone", autocomplete: "off"});
+  const out = h("div", {class: "stack", style: "gap:10px"});
+  let timer = null;
+  const LBL = {signed: "Signé", waiting: "À signer", declined: "Refusé"};
+  async function search() {
+    const term = q.value.trim(); if (term.length < 2) { out.replaceChildren(); return; }
+    try {
+      const {results} = await api("/people?q=" + encodeURIComponent(term));
+      if (!results.length) { out.replaceChildren(h("p", {class: "note"}, "Aucun document trouvé pour cette personne. Crée son dossier dans « Nouvelle demande », de préférence à partir d'un modèle.")); return; }
+      const people = new Map();
+      for (const r of results) { const key = (r.email || r.phone || r.name).toLowerCase(); if (!people.has(key)) people.set(key, {name: r.name, email: r.email, phone: r.phone, items: []}); people.get(key).items.push(r); }
+      out.replaceChildren(...[...people.values()].map(pp => {
+        const missing = pp.items.filter(r => r.status !== "signed");
+        return h("div", {class: "signer"},
+          h("div", {class: "row"}, h("b", {style: "flex:1"}, pp.name), h("span", {class: "pill " + (missing.length ? "waiting" : "signed")}, missing.length ? `${missing.length} document${missing.length > 1 ? "s" : ""} à signer` : "Dossier complet")),
+          h("span", {class: "lbl"}, [pp.email, pp.phone].filter(Boolean).join(" · ")),
+          h("ul", {class: "timeline"}, pp.items.map(r => h("li", {},
+            h("span", {class: "pill " + r.status}, LBL[r.status] || r.status),
+            h("span", {style: "flex:1"}, `${r.template_name ? r.template_name + " · " : ""}${r.title}`),
+            r.status === "waiting" && r.request_status === "pending" ? h("a", {class: "btn small", href: r.link, target: "_blank", rel: "noopener"}, "Signer maintenant") : null))));
+      }));
+    } catch (e) { out.replaceChildren(h("p", {class: "status err"}, e.message)); }
+  }
+  q.oninput = () => { clearTimeout(timer); timer = setTimeout(search, 300); };
+  app.replaceChildren(h("section", {class: "panel"},
+    h("h2", {}, "Accueil"),
+    h("p", {style: "margin:0;color:var(--muted)"}, "Vérifie en quelques secondes si le dossier d'un membre est complet avant sa première séance. S'il manque une signature, fais-le signer tout de suite sur cet appareil."),
+    h("div", {class: "field"}, h("label", {for: "q"}, "Rechercher un membre"), q), out));
+  q.focus();
+}
+
+/* ---------- demandes des membres : résiliation et suspension ---------- */
+const MTYPE = {resiliation: "Résiliation", suspension: "Suspension"};
+const MSTATUS = {received: "À traiter", accepted: "Acceptée", refused: "Refusée"};
+async function viewMembers(id) {
+  if (id) return viewMemberDetail(id);
+  app.replaceChildren(h("p", {class: "status"}, "Chargement…"));
+  try {
+    const {requests} = await api("/member-requests");
+    const link = new URL("/resiliation", location.href).href;
+    app.replaceChildren(h("section", {class: "panel"},
+      h("h2", {}, "Résiliations et suspensions"),
+      h("p", {style: "margin:0;color:var(--muted)"}, "Tes membres font leur demande eux-mêmes, en ligne : identité vérifiée par code email, signature, accusé de réception horodaté. Tu acceptes ou refuses ici, et ils reçoivent la réponse signée par email."),
+      h("div", {class: "field"}, h("span", {class: "lbl"}, "Lien à donner à tes membres (site, affiche, QR code) :"), h("span", {class: "link"}, link),
+        h("div", {class: "row"}, h("button", {class: "btn ghost small", type: "button", onclick: async e => { try { await navigator.clipboard.writeText(link); e.target.textContent = "Lien copié"; } catch {} }}, "Copier le lien"), h("a", {class: "btn ghost small", href: link, target: "_blank", rel: "noopener"}, "Voir la page"))),
+      requests.length ? h("div", {class: "list"}, requests.map(r => h("button", {class: "item", type: "button", onclick: () => viewMemberDetail(r.id)},
+        h("div", {class: "grow"}, h("b", {}, `${MTYPE[r.type]} · ${r.name}`), h("span", {}, `Reçue le ${fmtDate(r.created_at)} · ${r.type === "suspension" ? `du ${r.start_date} au ${r.end_date}` : `à partir du ${r.start_date}`}`)),
+        h("span", {class: "pill " + (r.status === "received" ? "waiting" : r.status === "accepted" ? "signed" : "cancelled")}, MSTATUS[r.status]))))
+        : h("p", {class: "note"}, "Aucune demande pour l'instant.")));
+  } catch (e) { app.replaceChildren(h("p", {class: "status err"}, e.message)); }
+}
+async function viewMemberDetail(id) {
+  const m = await api("/member-requests/" + id);
+  const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const note = h("textarea", {id: "mnote", placeholder: "Message pour le membre (facultatif). Ex. : dernière mensualité prélevée le 1er décembre.", style: "min-height:80px;font-family:var(--body)"});
+  const sigUrl = URL.createObjectURL(new Blob([await api(`/member-requests/${id}/signature`)], {type: "image/png"}));
+  const decide = decision => async e => {
+    let p12 = null, pass = null;
+    if (settings.seal) { pass = await askPassword("Sceller la réponse"); if (pass == null) return; try { p12 = new Uint8Array(await api("/seal")); Seal.sealInfo(p12, pass); } catch { return setStatus(st, "Mot de passe du sceau incorrect.", "err"); } }
+    e.target.disabled = true; setStatus(st, "Création du document…");
+    try {
+      let bytes = await memberPdf(m, decision, note.value.trim(), await api(`/member-requests/${id}/signature`));
+      if (p12) bytes = await Seal.sealPdf(bytes, p12, pass, {reason: safe(`${MTYPE[m.type]} : réponse`), location: safe(settings.profile.city || ""), name: safe(settings.profile.company || "")});
+      await api(`/member-requests/${id}/decision`, {method: "PUT", headers: {"content-type": "application/pdf", "x-decision": decision, "x-note": encodeURIComponent(note.value.trim())}, body: bytes});
+      await viewMemberDetail(id);
+    } catch (er) { setStatus(st, er.message, "err"); e.target.disabled = false; }
+  };
+  const row = (k, v) => v ? h("li", {}, h("span", {class: "lbl", style: "min-width:150px"}, k), h("span", {style: "flex:1"}, v)) : null;
+  app.replaceChildren(h("section", {class: "panel"},
+    h("div", {class: "row"}, h("button", {class: "icon-btn", type: "button", "aria-label": "Retour", onclick: () => viewMembers()}, "←"), h("h2", {style: "flex:1"}, `${MTYPE[m.type]} · ${m.name}`), h("span", {class: "pill " + (m.status === "received" ? "waiting" : m.status === "accepted" ? "signed" : "cancelled")}, MSTATUS[m.status])),
+    h("ul", {class: "timeline"},
+      row("Reçue le", fmtDateLong(m.created_at)), row("Email (vérifié)", m.email), row("Téléphone", m.phone), row("N° de membre", m.member_ref),
+      row(m.type === "suspension" ? "Période" : "À partir du", m.type === "suspension" ? `du ${m.start_date} au ${m.end_date}` : m.start_date), row("Motif", m.reason),
+      row("Connexion", `IP ${m.ip || "?"} · ${[m.city, m.country].filter(Boolean).join(", ")}`), row("Décision", m.decided_at ? `${MSTATUS[m.status]} le ${fmtDateLong(m.decided_at)}${m.decision_note ? " · « " + m.decision_note + " »" : ""}` : null)),
+    h("div", {class: "field"}, h("span", {class: "lbl"}, "Signature du membre"), h("img", {src: sigUrl, alt: "Signature du membre", style: "max-width:260px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px"})),
+    m.status === "received" ? h("div", {class: "stack", style: "gap:10px"}, h("div", {class: "field"}, h("label", {for: "mnote"}, "Ta réponse"), note),
+      h("div", {class: "row"}, h("button", {class: "btn", type: "button", onclick: decide("accepted")}, "Accepter"), h("button", {class: "btn danger", type: "button", onclick: decide("refused")}, "Refuser"))) : null,
+    m.status !== "received" ? h("div", {class: "row"}, h("button", {class: "btn ghost", type: "button", onclick: async () => download(`demande-${m.type}-${m.name.replace(/\W+/g, "-").toLowerCase()}.pdf`, await api(`/member-requests/${id}/pdf`))}, "Télécharger le document signé")) : null,
+    m.pdf_hash ? h("p", {class: "hash"}, "Empreinte SHA-256 : " + m.pdf_hash) : null, st));
+}
+async function memberPdf(m, decision, note, sigPng) {
+  const doc = await PDFDocument.create(), F = await doc.embedFont(StandardFonts.Helvetica), B = await doc.embedFont(StandardFonts.HelveticaBold), M = await doc.embedFont(StandardFonts.Courier);
+  const W = 595.28, H = 841.89, L = 50, p = doc.addPage([W, H]), prof = settings.profile, ink = rgb(.08, .1, .15), mut = rgb(.38, .42, .5);
+  let y = H - 60;
+  const line = (t, {f = F, size = 10.5, color = ink, gap = 5} = {}) => { const words = safe(t).split(" "); let cur = ""; for (const w of words) { const tt = cur ? cur + " " + w : w; if (f.widthOfTextAtSize(tt, size) > W - 2 * L && cur) { p.drawText(cur, {x: L, y, size, font: f, color}); y -= size + gap; cur = w; } else cur = tt; } if (cur) { p.drawText(cur, {x: L, y, size, font: f, color}); y -= size + gap; } };
+  p.drawRectangle({x: 0, y: H - 34, width: W, height: 34, color: rgb(.137, .251, .788)});
+  p.drawText(safe(`DEMANDE DE ${MTYPE[m.type].toUpperCase()} D'ADHÉSION`), {x: L, y: H - 22, size: 11, font: B, color: rgb(1, 1, 1)});
+  y = H - 70;
+  line(`${prof.company || ""}${prof.taxId ? " · CIF/NIF " + prof.taxId : ""}${prof.address ? " · " + prof.address : ""}${prof.city ? ", " + prof.city : ""}`, {size: 9, color: mut, gap: 12});
+  line("Le membre", {f: B, size: 12, gap: 6});
+  line(`Nom : ${m.name}`); line(`Email (vérifié par code) : ${m.email}`); if (m.phone) line(`Téléphone : ${m.phone}`); if (m.member_ref) line(`N° de membre : ${m.member_ref}`);
+  y -= 6; line("Sa demande", {f: B, size: 12, gap: 6});
+  line(m.type === "suspension" ? `Suspension de l'adhésion du ${m.start_date} au ${m.end_date}.` : `Résiliation de l'adhésion à partir du ${m.start_date}.`);
+  if (m.reason) line(`Motif indiqué : « ${m.reason} »`);
+  line(`Demande signée électroniquement et reçue le ${fmtDateLong(m.created_at)}.`);
+  line(`Texte accepté : « ${m.consent_text} »`, {size: 9, color: mut});
+  const img = await doc.embedPng(sigPng), k = Math.min(180 / img.width, 60 / img.height);
+  p.drawImage(img, {x: L, y: y - img.height * k - 4, width: img.width * k, height: img.height * k}); y -= img.height * k + 16;
+  line(`Signature du membre · IP ${m.ip || "?"} · ${[m.city, m.country].filter(Boolean).join(", ")}`, {size: 8, color: mut, gap: 14});
+  line("Réponse de l'établissement", {f: B, size: 12, gap: 6});
+  line(decision === "accepted" ? `Demande ACCEPTÉE.` : `Demande REFUSÉE.`, {f: B});
+  if (note) line(`Message : « ${note} »`);
+  line(`Réponse donnée le ${fmtDateLong(new Date().toISOString())} par ${prof.company || "l'établissement"}.`);
+  const stamp = await doc.embedPng(await canvasPng(stampCanvas(prof, {logo: logoImg, date: new Date()})));
+  p.drawImage(stamp, {x: W - L - 110, y: y - 120, width: 110, height: 110, opacity: .92}); y -= 130;
+  line(`Référence de la demande : ${m.id}`, {f: M, size: 8, color: mut});
+  line("Document établi électroniquement. La date et l'heure de la demande et de la réponse sont celles du serveur. L'adresse email du membre a été vérifiée par un code à usage unique.", {size: 8, color: mut});
+  doc.setProducer(safe(prof.company || "Espace signature"));
+  return doc.save({useObjectStreams: false});
+}
+
+/* ---------- export complet ---------- */
+async function exportAll(st) {
+  setStatus(st, "Préparation de l'export…");
+  try {
+    const data = await api("/export"), zip = new JSZip();
+    zip.file("donnees.json", JSON.stringify(data, null, 2));
+    const csv = rows => { if (!rows.length) return ""; const k = Object.keys(rows[0]); return [k.join(";"), ...rows.map(r => k.map(x => `"${String(r[x] ?? "").replace(/"/g, '""')}"`).join(";"))].join("\n"); };
+    zip.file("signataires.csv", "\ufeff" + csv(data.signers)); zip.file("demandes.csv", "\ufeff" + csv(data.requests)); zip.file("resiliations.csv", "\ufeff" + csv(data.memberRequests));
+    let n = 0;
+    for (const r of data.requests) {
+      const safeName = (r.title || r.id).replace(/[^\p{L}\p{N}]+/gu, "-").slice(0, 60);
+      try { zip.file(`documents/${safeName}-${r.id}-original.pdf`, await api(`/requests/${r.id}/original`)); } catch {}
+      if (r.status === "final") try { zip.file(`documents/${safeName}-${r.id}-signe.pdf`, await api(`/requests/${r.id}/final`)); } catch {}
+      setStatus(st, `Export : ${++n} / ${data.requests.length} demandes…`);
+    }
+    for (const m of data.memberRequests) if (m.status !== "received") try { zip.file(`resiliations/${m.type}-${m.id}.pdf`, await api(`/member-requests/${m.id}/pdf`)); } catch {}
+    download(`export-${new Date().toISOString().slice(0, 10)}.zip`, await zip.generateAsync({type: "blob"}), "application/zip");
+    setStatus(st, "Export téléchargé : toutes tes données et tous tes documents.", "ok");
+  } catch (e) { setStatus(st, e.message || "L'export a échoué.", "err"); }
 }
 
 /* ---------- emails automatiques ---------- */
@@ -442,6 +647,9 @@ function viewSettings() {
       h("div", {class: "row", style: "align-items:center"}, preview, h("p", {class: "note", style: "flex:1;min-width:200px"}, "Aperçu de ton cachet. Il est posé à la finalisation, avec la date du jour, aux endroits choisis pour chaque document.")),
       h("div", {class: "row"}, h("button", {class: "btn", type: "button", onclick: save}, "Enregistrer")), st),
     h("section", {class: "panel"}, h("h2", {}, "Sceau anti-modification"), sealBox),
+    (() => { const xs = h("div", {class: "status", role: "status", "aria-live": "polite"}); return h("section", {class: "panel"}, h("h2", {}, "Mes données"),
+      h("p", {style: "margin:0;color:var(--muted)"}, "Tes données t'appartiennent. Télécharge à tout moment un export complet : tous les documents (originaux et signés), les signataires, les journaux de preuve et les résiliations, en PDF, CSV et JSON."),
+      h("div", {class: "row"}, h("button", {class: "btn ghost", type: "button", onclick: () => exportAll(xs)}, "Exporter toutes mes données")), xs); })(),
     emailPanel());
   drawPreview(); drawSeal();
 }

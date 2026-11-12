@@ -100,7 +100,7 @@ async function mailAndLog(env, requestId, signerId, kind, msg) {
 async function sendInvite(env, base, requestId, signer, reminder = false) {
   const p = (await getSetting(env, "profile")) || {};
   const r = await env.DB.prepare("SELECT title, documents FROM requests WHERE id = ?").bind(requestId).first();
-  if (!signer.email) return;
+  if (!signer.email || signer.onsite) return;
   const docs = parse(r.documents) || [];
   const docList = docs.length > 1 ? `<br><br>Documents à signer :<br>${docs.map(x => "• " + esc(x.name)).join("<br>")}` : "";
   const link = new URL(`/s/${signer.token}`, base).href;
@@ -121,6 +121,14 @@ async function notifyOwnerSigned(env, base, s, declaredName) {
       (all ? "Toutes les signatures sont réunies. Finalise le document pour y apposer ton cachet et ton sceau : chaque signataire recevra alors automatiquement sa copie." : `Encore ${left.n} signature${left.n > 1 ? "s" : ""} en attente.`),
     button: all ? "Finaliser le document" : "Voir le suivi", buttonUrl: new URL("/admin.html", base).href});
   await mailAndLog(env, s.request_id, s.id, "owner_signed", {to, subject: all ? `À finaliser : ${s.title}` : `${declaredName} a signé : ${s.title}`, html, text: plain(html)});
+}
+
+async function notifyOwnerDeclined(env, base, s, reason) {
+  const p = (await getSetting(env, "profile")) || {};
+  const to = env.OWNER_EMAIL || p.email; if (!to || !emailReady(env)) return;
+  const html = mailLayout(p, {title: `${s.name} refuse de signer`, intro: `<b>${esc(s.name)}</b> a refusé de signer « <b>${esc(s.title)}</b> ».<br><br>Motif : « ${esc(reason)} »<br><br>Tu peux le recontacter, corriger le document et envoyer une nouvelle demande.`,
+    button: "Voir la demande", buttonUrl: new URL("/admin.html", base).href});
+  await mailAndLog(env, s.request_id, s.id, "owner_declined", {to, subject: `Refus de signature : ${s.title}`, html, text: plain(html)});
 }
 
 async function sendFinal(env, base, requestId) {
@@ -150,7 +158,7 @@ async function sendFinal(env, base, requestId) {
 
 // ---------------- code de vérification par email ----------------
 const maskEmail = e => String(e || "").replace(/^(.)(.*)(.@.*)$/, (m, a, b, c) => a + "•".repeat(Math.min(b.length, 6)) + c);
-const needsCode = (env, s) => emailReady(env) && !!s.email;
+const needsCode = (env, s) => emailReady(env) && !!s.email && !s.onsite;
 
 async function sendCode(env, req, base, s) {
   if (s.otp_sent_at && Date.now() - Date.parse(s.otp_sent_at) < 45000) return err(429, "Patiente quelques secondes avant de demander un nouveau code.");
@@ -172,7 +180,7 @@ async function runReminders(env) {
   const base = await getSetting(env, "base_url"); if (!base) return;
   const day = 86400000, t = Date.now();
   const {results} = await env.DB.prepare(`SELECT s.*, r.created_at AS request_created FROM signers s JOIN requests r ON r.id = s.request_id
-    WHERE r.status = 'pending' AND s.status = 'waiting' AND s.email IS NOT NULL AND s.email != '' AND s.reminders < 3`).all();
+    WHERE r.status = 'pending' AND s.status = 'waiting' AND s.onsite = 0 AND s.email IS NOT NULL AND s.email != '' AND s.reminders < 3`).all();
   for (const s of results) {
     const last = Date.parse(s.last_reminder_at || s.request_created);
     if (t - last < (s.last_reminder_at ? 3 : 2) * day - 3600000) continue;
@@ -181,10 +189,85 @@ async function runReminders(env) {
   }
 }
 
+// ---------------- demandes des membres : résiliation et suspension ----------------
+const MEMBER_TYPES = {resiliation: "résiliation", suspension: "suspension"};
+async function memberCode(env, req, base) {
+  const d = parse(await req.text()) || {};
+  const email = String(d.email || "").trim().toLowerCase().slice(0, 160);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err(400, "Indique une adresse email valide.");
+  if (!emailReady(env)) return err(503, "L'envoi d'emails n'est pas encore activé par l'établissement.");
+  const ipKey = "mrate:" + (client(req).ip || "x");
+  const count = +(await env.FILES.get(ipKey) || 0); if (count >= 8) return err(429, "Trop de demandes. Réessaie dans une heure.");
+  await env.FILES.put(ipKey, String(count + 1), {expirationTtl: 3600});
+  const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
+  await env.FILES.put("mcode:" + (await sha256(new TextEncoder().encode(email))), JSON.stringify({h: await sha256(new TextEncoder().encode(email + ":" + code)), tries: 0}), {expirationTtl: 900});
+  const p = (await getSetting(env, "profile")) || {};
+  const html = mailLayout(p, {title: "Ton code de vérification", intro: `Voici le code pour confirmer ta demande auprès de ${esc(p.company || "l'établissement")} :<br><br><span style="font-size:30px;font-weight:bold;letter-spacing:6px">${code}</span><br><br>Il est valable 15 minutes. Si tu n'as rien demandé, ignore ce message.`});
+  const r = await sendEmail(env, {to: email, subject: `Code de vérification : ${code}`, html, text: plain(html)});
+  return r.ok ? json({ok: true}) : err(502, "L'email n'a pas pu partir. Réessaie dans un instant.");
+}
+async function memberSubmit(env, req, base, ctx) {
+  const raw = await readBody(req, MAX_PNG * 1.4 + 20000); if (!raw) return err(413, "Demande trop volumineuse.");
+  const d = parse(new TextDecoder().decode(raw)); if (!d) return err(400, "Requête invalide.");
+  const type = MEMBER_TYPES[d.type] ? d.type : null; if (!type) return err(400, "Choisis résiliation ou suspension.");
+  const name = String(d.name || "").trim().slice(0, 120), email = String(d.email || "").trim().toLowerCase().slice(0, 160);
+  if (!name || !email) return err(400, "Indique ton nom et ton email.");
+  const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+  if (!isDate(d.startDate)) return err(400, "Indique la date souhaitée.");
+  if (type === "suspension" && (!isDate(d.endDate) || d.endDate <= d.startDate)) return err(400, "Indique la date de reprise, après la date de début.");
+  if (d.consent !== true || !d.consentText) return err(400, "Le consentement est obligatoire.");
+  const key = "mcode:" + (await sha256(new TextEncoder().encode(email)));
+  const st = parse(await env.FILES.get(key) || "");
+  if (!st) return err(400, "Demande d'abord ton code de vérification (ou il a expiré).");
+  if (st.tries >= 5) return err(429, "Trop d'essais. Demande un nouveau code.");
+  if ((await sha256(new TextEncoder().encode(email + ":" + String(d.code || "").replace(/\D/g, "")))) !== st.h) { st.tries++; await env.FILES.put(key, JSON.stringify(st), {expirationTtl: 900}); return err(400, "Code incorrect. Vérifie l'email reçu."); }
+  await env.FILES.delete(key);
+  let png; try { png = b64ToBytes(String(d.signature || "").replace(/^data:image\/png;base64,/, "")); } catch { return err(400, "Signature illisible."); }
+  if (!png.byteLength || png.byteLength > MAX_PNG || !isPng(png.buffer)) return err(400, "Signature illisible.");
+  const id = randomId(8), token = randomId(24), c = client(req), at = now();
+  await env.FILES.put(`msig:${id}`, png);
+  await env.DB.prepare(`INSERT INTO member_requests (id, token, type, created_at, name, email, phone, member_ref, start_date, end_date, reason, consent_text, method, ip, country, city, user_agent, email_verified_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, token, type, at, name, email, String(d.phone || "").slice(0, 40), String(d.memberRef || "").slice(0, 60), d.startDate, type === "suspension" ? d.endDate : null,
+    String(d.reason || "").slice(0, 1000), String(d.consentText).slice(0, 1000), d.method === "type" ? "type" : "draw", c.ip, c.country, c.city, c.ua, at).run();
+  ctx.waitUntil(memberReceipts(env, base, {id, token, type, created_at: at, name, email, start_date: d.startDate, end_date: d.endDate, reason: d.reason}));
+  return json({ok: true, id, receivedAt: at, link: new URL(`/m/${token}`, base).href});
+}
+async function memberReceipts(env, base, m) {
+  const p = (await getSetting(env, "profile")) || {}, label = MEMBER_TYPES[m.type];
+  const dates = m.type === "suspension" ? `du ${m.start_date} au ${m.end_date}` : `à partir du ${m.start_date}`;
+  const html = mailLayout(p, {title: `Demande de ${label} reçue`, intro: `Bonjour ${esc(m.name)},<br><br>Nous avons bien reçu ta demande de <b>${label}</b> ${esc(dates)}, signée électroniquement le ${esc(new Date(m.created_at).toLocaleString("fr-FR", {timeZone: "Europe/Madrid"}))} (heure de Madrid).<br><br>Cet email est ton accusé de réception : conserve-le. Tu recevras la réponse de ${esc(p.company || "l'établissement")} par email.`,
+    button: "Suivre ma demande", buttonUrl: new URL(`/m/${m.token}`, base).href, small: `Référence de la demande : ${esc(m.id)}`});
+  await sendEmail(env, {to: m.email, toName: m.name, subject: `Accusé de réception : demande de ${label}`, html, text: plain(html), replyTo: p.email || undefined});
+  const to = env.OWNER_EMAIL || p.email;
+  if (to) {
+    const h2 = mailLayout(p, {title: `Nouvelle demande de ${label}`, intro: `<b>${esc(m.name)}</b> (${esc(m.email)}) demande une ${label} ${esc(dates)}.${m.reason ? `<br><br>Motif : « ${esc(m.reason)} »` : ""}`, button: "Traiter la demande", buttonUrl: new URL("/admin.html", base).href});
+    await sendEmail(env, {to, subject: `Demande de ${label} : ${m.name}`, html: h2, text: plain(h2)});
+  }
+}
+async function sendMemberDecision(env, base, m) {
+  const p = (await getSetting(env, "profile")) || {}, label = MEMBER_TYPES[m.type], ok = m.status === "accepted";
+  const html = mailLayout(p, {title: ok ? `Ta demande de ${label} est acceptée` : `Réponse à ta demande de ${label}`,
+    intro: `Bonjour ${esc(m.name)},<br><br>${ok ? `Ta demande de ${label} est <b>acceptée</b>.` : `Ta demande de ${label} n'a pas pu être acceptée.`}${m.decision_note ? `<br><br>Message de ${esc(p.company || "l'établissement")} : « ${esc(m.decision_note)} »` : ""}<br><br>Le document récapitulatif, signé et horodaté, est joint à cet email.`,
+    button: "Voir ma demande", buttonUrl: new URL(`/m/${m.token}`, base).href, small: `Référence ${esc(m.id)} · Empreinte SHA-256 du document : ${esc(m.pdf_hash)}`});
+  await sendEmail(env, {to: m.email, toName: m.name, subject: `${ok ? "Acceptée" : "Réponse"} : demande de ${label}`, html, text: plain(html), replyTo: p.email || undefined,
+    attachments: [{filename: `demande-${m.type}.pdf`, url: new URL(`/api/m/${m.token}/pdf`, base).href}]});
+}
+async function handleMember(req, env, parts, url, ctx) {
+  const [a, b] = parts;
+  if (a === "code" && req.method === "POST") return memberCode(env, req, url);
+  if (a === "request" && req.method === "POST") return memberSubmit(env, req, url, ctx);
+  if (!/^[a-f0-9]{48}$/.test(a || "")) return err(404, "Demande introuvable.");
+  const m = await env.DB.prepare("SELECT * FROM member_requests WHERE token = ?").bind(a).first();
+  if (!m) return err(404, "Demande introuvable.");
+  if (!b && req.method === "GET") return json({type: m.type, createdAt: m.created_at, name: m.name, startDate: m.start_date, endDate: m.end_date, status: m.status, decisionNote: m.decision_note, decidedAt: m.decided_at, pdfHash: m.pdf_hash, profile: publicProfile(await getSetting(env, "profile"))});
+  if (b === "pdf" && req.method === "GET") { const buf = await env.FILES.get(`mpdf:${m.id}`, "arrayBuffer"); return buf ? pdfResponse(buf, `demande-${m.type}.pdf`) : err(404, "Pas encore traitée."); }
+  return err(405, "Action non prise en charge.");
+}
+
 // ---------------- signataire ----------------
 async function signerByToken(env, token) {
   if (!/^[a-f0-9]{48}$/.test(token)) return null;
-  return env.DB.prepare("SELECT s.*, r.title, r.file_name, r.status AS request_status, r.original_hash, r.final_hash, r.documents FROM signers s JOIN requests r ON r.id = s.request_id WHERE s.token = ?").bind(token).first();
+  return env.DB.prepare("SELECT s.*, r.title, r.file_name, r.status AS request_status, r.original_hash, r.original_size, r.final_hash, r.documents FROM signers s JOIN requests r ON r.id = s.request_id WHERE s.token = ?").bind(token).first();
 }
 
 async function handleSigner(req, env, parts, url, ctx) {
@@ -199,7 +282,7 @@ async function handleSigner(req, env, parts, url, ctx) {
     }
     const profile = publicProfile(await getSetting(env, "profile"));
     return json({title: s.title, fileName: s.file_name, profile, status: s.request_status, originalHash: s.original_hash, finalHash: s.final_hash, documents: parse(s.documents) || [],
-      signer: {name: s.name, role: s.role, email: s.email, status: s.status, signedAt: s.signed_at, placements: parse(s.placements) || [], requiresCode: needsCode(env, s), emailMasked: maskEmail(s.email)}});
+      signer: {name: s.name, role: s.role, email: s.email, status: s.status, signedAt: s.signed_at, declinedAt: s.declined_at, onsite: !!s.onsite, placements: parse(s.placements) || [], requiresCode: needsCode(env, s), emailMasked: maskEmail(s.email)}});
   }
   if (req.method === "GET" && action === "pdf") {
     const key = s.request_status === "final" ? `pdf:${s.request_id}:final` : `pdf:${s.request_id}:original`;
@@ -217,6 +300,42 @@ async function handleSigner(req, env, parts, url, ctx) {
     const d = parse(await req.text()) || {};
     await logEvent(env, req, s.request_id, s.id, "read", {pages: +d.pages || null, seconds: +d.seconds || null});
     return json({ok: true});
+  }
+  if (req.method === "POST" && action === "decline") {
+    if (s.status !== "waiting" || s.request_status !== "pending") return err(409, "Ce document n'attend plus ta réponse.");
+    const d = parse(await req.text()) || {};
+    const reason = String(d.reason || "").trim().slice(0, 1000);
+    if (!reason) return err(400, "Indique en quelques mots pourquoi tu refuses.");
+    const at = now();
+    const r = await env.DB.prepare("UPDATE signers SET status = 'declined', declined_at = ?, decline_reason = ? WHERE id = ? AND status = 'waiting'").bind(at, reason, s.id).run();
+    if (!r.meta.changes) return err(409, "Ce document n'attend plus ta réponse.");
+    await logEvent(env, req, s.request_id, s.id, "declined", {reason});
+    ctx.waitUntil(notifyOwnerDeclined(env, url, s, reason));
+    return json({ok: true, declinedAt: at});
+  }
+  if (req.method === "POST" && action === "sign-cert") {
+    // PDF signé avec un certificat électronique (AutoFirma, DNIe, FNMT) : il doit commencer exactement par l'original
+    if (s.status !== "waiting" || s.request_status !== "pending") return err(409, "Ce document n'attend plus ta signature.");
+    const buf = await readBody(req, MAX_PDF + 4 * 1024 * 1024);
+    if (!buf || !isPdf(buf)) return err(400, "Envoie le PDF signé avec ton certificat.");
+    if (buf.byteLength <= s.original_size) return err(400, "Ce fichier n'est pas le document signé : il est plus petit que l'original.");
+    if ((await sha256(buf.slice(0, s.original_size))) !== s.original_hash) return err(400, "Ce PDF ne correspond pas au document envoyé : il a été modifié avant la signature, ou ce n'est pas le bon fichier.");
+    const meta = parse(decodeURIComponent(req.headers.get("x-meta") || "")) || {};
+    const cert = meta.cert || {};
+    if (!cert.valid) return err(400, "La signature du certificat n'a pas pu être vérifiée.");
+    if (meta.consent !== true || !meta.consentText) return err(400, "Le consentement est obligatoire.");
+    const c = client(req), at = now();
+    await env.FILES.put(`certpdf:${s.id}`, buf);
+    const info = {subject: String(cert.subject || "").slice(0, 300), name: String(cert.name || "").slice(0, 160), idNumber: String(cert.idNumber || "").slice(0, 40), issuer: String(cert.issuer || "").slice(0, 300),
+      serial: String(cert.serial || "").slice(0, 80), signingTime: String(cert.signingTime || "").slice(0, 40), notAfter: String(cert.notAfter || "").slice(0, 40), algorithm: String(cert.algorithm || "").slice(0, 40), sha256: await sha256(buf), size: buf.byteLength};
+    const res = await env.DB.prepare(`UPDATE signers SET status = 'signed', signed_at = ?, consent_at = ?, consent_text = ?, declared_name = ?, declared_id = ?, method = 'certificate',
+      ip = ?, country = ?, city = ?, user_agent = ?, identity_verified_at = ?, cert_info = ?, otp_hash = NULL WHERE id = ? AND status = 'waiting'`)
+      .bind(at, meta.consentAt && !isNaN(Date.parse(meta.consentAt)) ? meta.consentAt : at, String(meta.consentText).slice(0, 1000), info.name || s.name, info.idNumber,
+        c.ip, c.country, c.city, c.ua, at, JSON.stringify(info), s.id).run();
+    if (!res.meta.changes) return err(409, "Ce document a déjà été signé avec ce lien.");
+    await logEvent(env, req, s.request_id, s.id, "signed", {name: info.name, idNumber: info.idNumber, identity: "certificat électronique", issuer: info.issuer, signedPdfSha256: info.sha256, documentSha256: s.original_hash});
+    ctx.waitUntil(notifyOwnerSigned(env, url, s, info.name || s.name));
+    return json({ok: true, signedAt: at});
   }
   if (req.method === "POST" && action === "sign") {
     if (s.status === "signed") return err(409, "Ce document a déjà été signé avec ce lien.");
@@ -249,7 +368,7 @@ async function handleSigner(req, env, parts, url, ctx) {
       .bind(at, d.consentAt && !isNaN(Date.parse(d.consentAt)) ? d.consentAt : at, String(d.consentText).slice(0, 1000), declaredName, declaredId,
         d.method === "type" ? "type" : "draw", c.ip, c.country, c.city, c.ua, verifiedAt, s.id).run();
     if (!res.meta.changes) return err(409, "Ce document a déjà été signé avec ce lien.");
-    await logEvent(env, req, s.request_id, s.id, "signed", {name: declaredName, idNumber: declaredId, signatureSha256: await sha256(png), documentSha256: s.original_hash, identity: verifiedAt ? "code email" : "lien personnel"});
+    await logEvent(env, req, s.request_id, s.id, "signed", {name: declaredName, idNumber: declaredId, signatureSha256: await sha256(png), documentSha256: s.original_hash, identity: verifiedAt ? "code email" : s.onsite ? "sur place" : "lien personnel"});
     ctx.waitUntil(notifyOwnerSigned(env, url, s, declaredName));
     return json({ok: true, signedAt: at});
   }
@@ -341,14 +460,14 @@ async function handleAdmin(req, env, parts, url, ctx) {
       for (const s of signers) if (!Array.isArray(s.placements) || !s.placements.length) return err(400, `Place la signature de ${s.name} sur le document.`);
       const docs = (Array.isArray(d.documents) ? d.documents.slice(0, 15) : []).map(x => ({name: String(x.name || "Document").slice(0, 120), from: Math.max(1, +x.from | 0), to: Math.max(1, +x.to | 0), sha256: String(x.sha256 || "").replace(/[^a-f0-9]/g, "").slice(0, 64), size: +x.size | 0}));
       const rid = randomId(8);
-      const stmts = [env.DB.prepare("INSERT INTO requests (id, title, file_name, created_at, status, stamps, documents) VALUES (?,?,?,?, 'draft', ?, ?)")
-        .bind(rid, title, fileName, now(), JSON.stringify(Array.isArray(d.stamps) ? d.stamps.slice(0, 40) : []), JSON.stringify(docs))];
+      const stmts = [env.DB.prepare("INSERT INTO requests (id, title, file_name, created_at, status, stamps, documents, template_id) VALUES (?,?,?,?, 'draft', ?, ?, ?)")
+        .bind(rid, title, fileName, now(), JSON.stringify(Array.isArray(d.stamps) ? d.stamps.slice(0, 40) : []), JSON.stringify(docs), d.templateId ? String(d.templateId).slice(0, 32) : null)];
       const links = [];
       signers.forEach((s, i) => {
         const sid = randomId(8), token = randomId(24);
         links.push({id: sid, name: s.name, token});
-        stmts.push(env.DB.prepare("INSERT INTO signers (id, request_id, position, name, email, phone, role, token, placements) VALUES (?,?,?,?,?,?,?,?,?)")
-          .bind(sid, rid, i, String(s.name).trim().slice(0, 120), String(s.email || "").slice(0, 160), String(s.phone || "").slice(0, 40), String(s.role || "").slice(0, 60), token, JSON.stringify(s.placements.slice(0, 40))));
+        stmts.push(env.DB.prepare("INSERT INTO signers (id, request_id, position, name, email, phone, role, token, placements, onsite) VALUES (?,?,?,?,?,?,?,?,?,?)")
+          .bind(sid, rid, i, String(s.name).trim().slice(0, 120), String(s.email || "").slice(0, 160), String(s.phone || "").slice(0, 40), String(s.role || "").slice(0, 60), token, JSON.stringify(s.placements.slice(0, 40)), s.onsite ? 1 : 0));
       });
       await env.DB.batch(stmts);
       return json({id: rid, signers: links});
@@ -379,7 +498,7 @@ async function handleAdmin(req, env, parts, url, ctx) {
     if (sub === "final" && req.method === "PUT") {
       if (r.status !== "pending") return err(409, "Ce document est déjà finalisé ou annulé.");
       const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM signers WHERE request_id = ? AND status != 'signed'").bind(id).first();
-      if (left.n > 0) return err(409, "Tous les signataires n'ont pas encore signé.");
+      if (left.n > 0) return err(409, "Tous les signataires n'ont pas encore signé (ou l'un d'eux a refusé).");
       const buf = await readBody(req, MAX_PDF + 2 * 1024 * 1024); if (!buf || !isPdf(buf)) return err(400, "PDF attendu.");
       const hash = await sha256(buf), at = now();
       await env.FILES.put(`pdf:${id}:final`, buf);
@@ -408,9 +527,93 @@ async function handleAdmin(req, env, parts, url, ctx) {
     }
     if (!sub && req.method === "DELETE") {
       const {results} = await env.DB.prepare("SELECT id FROM signers WHERE request_id = ?").bind(id).all();
-      await Promise.all([env.FILES.delete(`pdf:${id}:original`), env.FILES.delete(`pdf:${id}:final`), ...results.map(s => env.FILES.delete(`sig:${s.id}`))]);
+      await Promise.all([env.FILES.delete(`pdf:${id}:original`), env.FILES.delete(`pdf:${id}:final`), ...results.map(s => env.FILES.delete(`sig:${s.id}`)), ...results.map(s => env.FILES.delete(`certpdf:${s.id}`))]);
       await env.DB.batch([env.DB.prepare("DELETE FROM events WHERE request_id = ?").bind(id), env.DB.prepare("DELETE FROM signers WHERE request_id = ?").bind(id), env.DB.prepare("DELETE FROM requests WHERE id = ?").bind(id)]);
       return json({ok: true});
+    }
+  }
+  if (res === "certpdf" && id && req.method === "GET") {
+    const buf = await env.FILES.get(`certpdf:${id}`, "arrayBuffer");
+    return buf ? pdfResponse(buf, "signe-certificat.pdf") : err(404, "Introuvable.");
+  }
+  // ---- modèles de dossier
+  if (res === "templates") {
+    if (!id && req.method === "GET") {
+      const {results} = await env.DB.prepare("SELECT id, name, created_at, file_name, size FROM templates ORDER BY name").all();
+      return json({templates: results});
+    }
+    if (!id && req.method === "POST") {
+      const d = parse(await req.text()); if (!d) return err(400, "Requête invalide.");
+      const name = String(d.name || "").trim().slice(0, 120); if (!name) return err(400, "Donne un nom au modèle.");
+      const data = {title: String(d.title || name).slice(0, 160), documents: Array.isArray(d.documents) ? d.documents.slice(0, 15) : [], stamps: Array.isArray(d.stamps) ? d.stamps.slice(0, 40) : [],
+        slots: (Array.isArray(d.slots) ? d.slots.slice(0, 10) : []).map(x => ({role: String(x.role || "").slice(0, 60), onsite: !!x.onsite, placements: Array.isArray(x.placements) ? x.placements.slice(0, 40) : []}))};
+      if (!data.slots.length) return err(400, "Le modèle doit avoir au moins un signataire.");
+      const tid = randomId(8);
+      await env.DB.prepare("INSERT INTO templates (id, name, created_at, file_name, size, data) VALUES (?,?,?,?,?,?)").bind(tid, name, now(), String(d.fileName || "dossier.pdf").slice(0, 160), 0, JSON.stringify(data)).run();
+      return json({id: tid});
+    }
+    if (id && sub === "pdf" && req.method === "PUT") {
+      const buf = await readBody(req, MAX_PDF); if (!buf || !isPdf(buf)) return err(400, "PDF attendu.");
+      await env.FILES.put(`tpl:${id}`, buf);
+      await env.DB.prepare("UPDATE templates SET size = ? WHERE id = ?").bind(buf.byteLength, id).run();
+      return json({ok: true});
+    }
+    if (id && sub === "pdf" && req.method === "GET") {
+      const buf = await env.FILES.get(`tpl:${id}`, "arrayBuffer"); return buf ? pdfResponse(buf, "modele.pdf") : err(404, "Introuvable.");
+    }
+    if (id && !sub && req.method === "GET") {
+      const t = await env.DB.prepare("SELECT * FROM templates WHERE id = ?").bind(id).first();
+      return t ? json({...t, data: parse(t.data)}) : err(404, "Modèle introuvable.");
+    }
+    if (id && !sub && req.method === "DELETE") {
+      await env.FILES.delete(`tpl:${id}`); await env.DB.prepare("DELETE FROM templates WHERE id = ?").bind(id).run();
+      return json({ok: true});
+    }
+  }
+  // ---- accueil : où en est le dossier d'une personne
+  if (res === "people" && req.method === "GET") {
+    const q = String(url.searchParams.get("q") || "").trim().toLowerCase().slice(0, 80);
+    if (q.length < 2) return json({results: []});
+    const like = "%" + q.replace(/[%_]/g, "") + "%";
+    const {results} = await env.DB.prepare(`SELECT s.id, s.name, s.email, s.phone, s.role, s.status, s.signed_at, s.declined_at, s.token, s.onsite, r.id AS request_id, r.title, r.status AS request_status, r.created_at, r.template_id, t.name AS template_name
+      FROM signers s JOIN requests r ON r.id = s.request_id LEFT JOIN templates t ON t.id = r.template_id
+      WHERE r.status IN ('pending','final') AND (lower(s.name) LIKE ? OR lower(s.email) LIKE ? OR s.phone LIKE ?) ORDER BY r.created_at DESC LIMIT 60`).bind(like, like, like).all();
+    return json({results: results.map(x => ({...x, link: new URL(`/s/${x.token}`, url).href, token: undefined}))});
+  }
+  // ---- export complet
+  if (res === "export" && req.method === "GET") {
+    const all = q => env.DB.prepare(q).all().then(r => r.results);
+    const [requests, signers, events, templates, memberRequests] = await Promise.all([all("SELECT * FROM requests"), all("SELECT * FROM signers"), all("SELECT * FROM events ORDER BY id"), all("SELECT * FROM templates"), all("SELECT * FROM member_requests")]);
+    const strip = s => ({...s, token: undefined, otp_hash: undefined});
+    return json({exportedAt: now(), profile: await getSetting(env, "profile"), seal: await getSetting(env, "seal"), requests, signers: signers.map(strip), events, templates, memberRequests: memberRequests.map(m => ({...m, token: undefined}))});
+  }
+  // ---- demandes des membres (résiliation, suspension)
+  if (res === "member-requests") {
+    if (!id && req.method === "GET") {
+      const {results} = await env.DB.prepare("SELECT id, type, created_at, name, email, status, start_date, end_date FROM member_requests ORDER BY created_at DESC LIMIT 300").all();
+      return json({requests: results});
+    }
+    const m = id ? await env.DB.prepare("SELECT * FROM member_requests WHERE id = ?").bind(id).first() : null;
+    if (!m) return err(404, "Demande introuvable.");
+    if (!sub && req.method === "GET") return json({...m, token: undefined, link: new URL(`/m/${m.token}`, url).href});
+    if (sub === "signature" && req.method === "GET") {
+      const buf = await env.FILES.get(`msig:${m.id}`, "arrayBuffer");
+      return buf ? new Response(buf, {headers: {"content-type": "image/png", "cache-control": "no-store"}}) : err(404, "Introuvable.");
+    }
+    if (sub === "pdf" && req.method === "GET") {
+      const buf = await env.FILES.get(`mpdf:${m.id}`, "arrayBuffer"); return buf ? pdfResponse(buf, `demande-${m.type}.pdf`) : err(404, "Pas encore traitée.");
+    }
+    if (sub === "decision" && req.method === "PUT") {
+      // le navigateur du gérant envoie le PDF final (demande + décision, scellé) ; la décision est inscrite à l'heure du serveur
+      if (m.status !== "received") return err(409, "Cette demande a déjà été traitée.");
+      const decision = req.headers.get("x-decision"), note = decodeURIComponent(req.headers.get("x-note") || "").slice(0, 1000);
+      if (!["accepted", "refused"].includes(decision)) return err(400, "Décision invalide.");
+      const buf = await readBody(req, MAX_PDF); if (!buf || !isPdf(buf)) return err(400, "PDF attendu.");
+      const at = now(), hash = await sha256(buf);
+      await env.FILES.put(`mpdf:${m.id}`, buf);
+      await env.DB.prepare("UPDATE member_requests SET status = ?, decision_note = ?, decided_at = ?, pdf_hash = ? WHERE id = ? AND status = 'received'").bind(decision, note, at, hash, m.id).run();
+      if (emailReady(env)) ctx.waitUntil(sendMemberDecision(env, url, {...m, status: decision, decision_note: note, decided_at: at, pdf_hash: hash}));
+      return json({ok: true, decidedAt: at, hash});
     }
   }
   if (res === "signature" && id && req.method === "GET") {
@@ -426,6 +629,7 @@ export default {
     const url = new URL(req.url);
     const parts = url.pathname.split("/").filter(Boolean);
     try {
+      if (parts[0] === "m" && parts.length === 2 && req.method === "GET") return env.ASSETS.fetch(new Request(new URL("/resiliation", url), req));
       if (parts[0] === "s" && parts.length === 2 && req.method === "GET") {
         // page de signature : même page pour tous les liens, le jeton est lu dans l'adresse
         return env.ASSETS.fetch(new Request(new URL("/signer", url), req));
@@ -436,6 +640,8 @@ export default {
         return r.value ? new Response(r.value, {headers: {"content-type": r.metadata?.type || "image/png", "cache-control": "public, max-age=300"}}) : err(404, "Pas de logo.");
       }
       if (parts[1] === "s" && parts[2]) return await handleSigner(req, env, parts.slice(2), url, ctx);
+      if (parts[1] === "m" && parts[2]) return await handleMember(req, env, parts.slice(2), url, ctx);
+      if (parts[1] === "profile" && req.method === "GET") return json(publicProfile(await getSetting(env, "profile")));
       if (parts[1] === "admin") return await handleAdmin(req, env, parts.slice(2), url, ctx);
       return err(404, "Route inconnue.");
     } catch (e) {

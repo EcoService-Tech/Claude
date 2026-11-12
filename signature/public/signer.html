@@ -19,6 +19,7 @@
 </div>
 <script src="/vendor/pdf-lib.min.js"></script>
 <script src="/vendor/pdf.min.js"></script>
+<script src="/vendor/seal.js"></script>
 <script src="/common.js"></script>
 <script>
 const token = location.pathname.split("/").filter(Boolean)[1] || "";
@@ -52,9 +53,17 @@ function finalView() {
     info.finalHash ? h("p", {class: "hash"}, "Empreinte SHA-256 : " + info.finalHash) : null));
 }
 function signedView() {
+  const onsite = info.signer.onsite;
   app.replaceChildren(h("section", {class: "panel done"},
     h("div", {class: "big-ok"}, "Merci, c'est signé"),
-    h("p", {style: "margin:0"}, `Ta signature a été enregistrée le ${fmtDate(info.signer.signedAt)}. Quand tout le monde aura signé, tu recevras le document final par email. Il restera aussi disponible à cette même adresse.`)));
+    h("p", {style: "margin:0"}, onsite
+      ? `Ta signature a été enregistrée le ${fmtDate(info.signer.signedAt)}. Tu peux rendre l'appareil à l'accueil.`
+      : `Ta signature a été enregistrée le ${fmtDate(info.signer.signedAt)}. Quand tout le monde aura signé, tu recevras le document final par email. Il restera aussi disponible à cette même adresse.`)));
+}
+function declinedView() {
+  app.replaceChildren(h("section", {class: "panel done"},
+    h("h2", {}, "Refus enregistré"),
+    h("p", {style: "margin:0"}, `Ton refus a été enregistré le ${fmtDate(info.signer.declinedAt)} et transmis à ${info.profile.company || "l'expéditeur"}. Le document ne sera pas signé.`)));
 }
 
 async function signView() {
@@ -92,6 +101,59 @@ async function signView() {
     h("label", {for: "otp"}, `Pour confirmer que c'est bien toi, reçois un code à ${me.emailMasked} et saisis-le ici.`),
     h("div", {class: "row"}, sendBtn, codeIn), codeSt) : null;
   const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  // refuser de signer, avec un motif
+  const reasonIn = h("textarea", {id: "reason", placeholder: "Ex. : une clause ne correspond pas à ce qui était convenu", style: "min-height:80px;font-family:var(--body)"});
+  const declineSt = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const declineBox = h("div", {class: "field", style: "gap:8px", hidden: true},
+    h("label", {for: "reason"}, "Pourquoi refuses-tu de signer ? Ton message est transmis à l'expéditeur."), reasonIn,
+    h("div", {class: "row"}, h("button", {class: "btn danger", type: "button", onclick: async e => {
+      if (!reasonIn.value.trim()) return setStatus(declineSt, "Indique en quelques mots la raison du refus.", "err");
+      e.target.disabled = true;
+      try { const r = await api("/decline", {method: "POST", body: JSON.stringify({reason: reasonIn.value.trim()})}); info.signer.declinedAt = r.declinedAt; declinedView(); }
+      catch (er) { setStatus(declineSt, er.message, "err"); e.target.disabled = false; }
+    }}, "Confirmer le refus"), h("button", {class: "btn ghost small", type: "button", onclick: () => declineBox.hidden = true}, "Annuler")), declineSt);
+  const declinePanel = h("section", {class: "panel"}, h("div", {class: "row"}, h("span", {style: "flex:1;color:var(--muted);font-size:.9rem"}, "Tu n'es pas d'accord avec le document ?"),
+    h("button", {class: "btn ghost small", type: "button", onclick: () => { declineBox.hidden = false; reasonIn.focus(); }}, "Je refuse de signer")), declineBox);
+  // signer avec son certificat électronique (DNIe, FNMT) via AutoFirma
+  const certFile = h("input", {type: "file", accept: "application/pdf,.pdf", id: "certPdf"});
+  const certSt = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const certConsent = h("input", {type: "checkbox", id: "certConsent"});
+  let certConsentAt = null, certBytes = null, certResult = null;
+  certConsent.onchange = () => { certConsentAt = certConsent.checked ? new Date().toISOString() : null; certReady(); };
+  const certGo = h("button", {class: "btn", type: "button", disabled: true}, "Envoyer le document signé");
+  const certReady = () => certGo.disabled = !(certResult?.valid && certConsent.checked);
+  certFile.onchange = async () => {
+    certResult = null; certReady(); const f = certFile.files[0]; if (!f) return;
+    setStatus(certSt, "Vérification de la signature…");
+    try {
+      certBytes = new Uint8Array(await f.arrayBuffer());
+      if (certBytes.length <= pdfBuf.byteLength || await hex256(certBytes.slice(0, pdfBuf.byteLength).buffer) !== info.originalHash) return setStatus(certSt, "Ce PDF n'est pas le document envoyé, ou il a été modifié avant d'être signé. Signe le fichier téléchargé ici, sans le modifier.", "err");
+      certResult = await Seal.verifyPades(certBytes);
+      if (!certResult.valid) return setStatus(certSt, certResult.reason || "La signature n'a pas pu être vérifiée.", "err");
+      if (!certResult.coversWholeFile) return setStatus(certSt, "Le fichier a été modifié après la signature.", "err");
+      setStatus(certSt, `Signature valide : ${certResult.name}${certResult.idNumber ? " (" + certResult.idNumber + ")" : ""}, certificat émis par ${certResult.issuer}.`, "ok");
+    } catch { setStatus(certSt, "Ce fichier n'a pas pu être lu.", "err"); }
+    certReady();
+  };
+  certGo.onclick = async () => {
+    certGo.disabled = true; setStatus(certSt, "Envoi du document signé…");
+    try {
+      await api("/viewed", {method: "POST", body: JSON.stringify({pages: viewer.count, seconds: Math.round((Date.now() - startedAt) / 1000)})}).catch(() => {});
+      const meta = {consent: true, consentText: CONSENT, consentAt: certConsentAt, cert: certResult};
+      const r = await api("/sign-cert", {method: "POST", headers: {"content-type": "application/pdf", "x-meta": encodeURIComponent(JSON.stringify(meta))}, body: certBytes});
+      info.signer.signedAt = r.signedAt; signedView();
+    } catch (e) { setStatus(certSt, e.message, "err"); certReady(); }
+  };
+  const certPanel = me.onsite ? null : h("details", {class: "panel"}, h("summary", {style: "cursor:pointer;font-weight:600"}, "Signer avec mon certificat électronique (DNIe, FNMT)"),
+    h("div", {class: "stack", style: "gap:10px;margin-top:10px"},
+      h("p", {class: "note"}, "Signature la plus forte en Espagne. Il te faut un ordinateur avec l'application gratuite AutoFirma et ton certificat (DNIe avec lecteur, ou certificat FNMT installé)."),
+      h("ol", {style: "margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px"},
+        h("li", {}, h("button", {class: "btn ghost small", type: "button", onclick: () => download(info.fileName, pdfBuf)}, "Télécharger le document"), " sans le modifier."),
+        h("li", {}, "Ouvre-le dans ", h("a", {href: "https://firmaelectronica.gob.es/Home/Descargas.html", target: "_blank", rel: "noopener"}, "AutoFirma"), " et signe-le avec ton certificat (format PDF)."),
+        h("li", {}, h("label", {for: "certPdf"}, "Envoie ici le fichier signé : "), certFile)),
+      certSt,
+      h("label", {class: "check", for: "certConsent"}, certConsent, h("span", {}, CONSENT)),
+      h("div", {class: "row"}, certGo)));
   const form = h("section", {class: "panel"},
     h("h2", {}, "2. Ta signature"),
     docs.length > 1 ? h("p", {class: "note"}, "Une seule signature suffit : elle sera apposée sur chacun des documents.") : null,
@@ -122,7 +184,7 @@ async function signView() {
       docs.length > 1 ? h("div", {class: "field"}, h("span", {class: "lbl"}, `${docs.length} documents à lire et signer :`), h("ul", {class: "timeline"}, docs.map((d, i) => h("li", {}, h("button", {class: "btn ghost small", type: "button", onclick: () => viewer.go(d.from)}, `${i + 1}. ${d.name}`))))) : null,
       h("h2", {}, docs.length > 1 ? "1. Lis les documents" : "1. Lis le document"), readNote, where, viewer.el,
       h("div", {class: "row"}, h("button", {class: "btn ghost small", type: "button", onclick: () => download(info.fileName, pdfBuf)}, "Télécharger pour lire"))),
-    form);
+    form, certPanel, declinePanel);
   await viewer.load(await openPdf(pdfBuf));
   const first = zones[0]?.page; if (first && first !== 1 && viewer.count === 1) await viewer.go(first);
 }
@@ -133,6 +195,7 @@ async function signView() {
     header();
     if (info.status === "final") return finalView();
     if (info.signer.status === "signed") return signedView();
+    if (info.signer.status === "declined") return declinedView();
     pdfBuf = await api("/pdf");
     const hash = await hex256(pdfBuf);
     if (hash !== info.originalHash) throw new Error("Le document reçu ne correspond pas à l'original. Recharge la page.");
