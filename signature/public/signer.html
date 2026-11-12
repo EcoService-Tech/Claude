@@ -77,6 +77,20 @@ async function signView() {
   const pad = signaturePad({nameHint: () => nameIn.value});
   pad.onchange = ready;
   const go = h("button", {class: "btn", type: "button", disabled: true}, "Signer le document");
+  // vérification d'identité par code envoyé à l'email du signataire
+  const codeIn = h("input", {type: "text", id: "otp", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "6", placeholder: "6 chiffres", style: "max-width:160px;letter-spacing:4px;font-family:var(--mono)"});
+  const codeSt = h("div", {class: "status", role: "status", "aria-live": "polite"});
+  const sendBtn = h("button", {class: "btn ghost small", type: "button"}, "Recevoir mon code par email");
+  sendBtn.onclick = async () => {
+    sendBtn.disabled = true; setStatus(codeSt, "Envoi du code…");
+    try { const r = await api("/code", {method: "POST"}); setStatus(codeSt, `Code envoyé à ${r.sentTo}. Pense à regarder tes spams.`, "ok"); sendBtn.textContent = "Renvoyer un code"; codeIn.focus(); }
+    catch (e) { setStatus(codeSt, e.message, "err"); }
+    setTimeout(() => sendBtn.disabled = false, 45000);
+  };
+  codeIn.oninput = () => { codeIn.value = codeIn.value.replace(/\D/g, "").slice(0, 6); ready(); };
+  const codeBox = me.requiresCode ? h("div", {class: "field", style: "gap:8px"},
+    h("label", {for: "otp"}, `Pour confirmer que c'est bien toi, reçois un code à ${me.emailMasked} et saisis-le ici.`),
+    h("div", {class: "row"}, sendBtn, codeIn), codeSt) : null;
   const st = h("div", {class: "status", role: "status", "aria-live": "polite"});
   const form = h("section", {class: "panel"},
     h("h2", {}, "2. Ta signature"),
@@ -84,20 +98,20 @@ async function signView() {
     h("div", {class: "fields"}, h("div", {class: "field"}, h("label", {for: "fullName"}, "Nom complet"), nameIn), h("div", {class: "field"}, h("label", {for: "idNum"}, "Pièce d'identité (conseillé)"), idIn)),
     pad.el,
     h("label", {class: "check", for: "consent"}, consent, h("span", {}, CONSENT)),
-    h("div", {class: "row"}, go), st);
+    codeBox, h("div", {class: "row"}, go), st);
   function progress() {
     const left = viewer.count - seen.size;
     readNote.textContent = left > 0 ? `Lis toutes les pages avant de signer : encore ${left} page${left > 1 ? "s" : ""} à voir. Utilise les flèches.` : (docs.length > 1 ? "Tu as vu toutes les pages des documents. Tu peux signer en bas." : "Tu as vu toutes les pages. Tu peux signer en bas.");
     ready();
   }
-  function ready() { go.disabled = !(viewer.count && seen.size >= viewer.count && nameIn.value.trim() && consent.checked && pad.png); }
+  function ready() { go.disabled = !(viewer.count && seen.size >= viewer.count && nameIn.value.trim() && consent.checked && pad.png && (!me.requiresCode || codeIn.value.length === 6)); }
   nameIn.oninput = ready;
   go.onclick = async () => {
     go.disabled = true; setStatus(st, "Enregistrement de ta signature…");
     try {
       await api("/viewed", {method: "POST", body: JSON.stringify({pages: seen.size, seconds: Math.round((Date.now() - startedAt) / 1000)})}).catch(() => {});
       const r = await api("/sign", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({
-        name: nameIn.value.trim(), idNumber: idIn.value.trim(), consent: true, consentText: CONSENT, consentAt, method: pad.method, signature: pad.png, documentHash: info.originalHash})});
+        name: nameIn.value.trim(), idNumber: idIn.value.trim(), consent: true, consentText: CONSENT, consentAt, method: pad.method, signature: pad.png, documentHash: info.originalHash, code: codeIn.value})});
       info.signer.signedAt = r.signedAt; signedView();
     } catch (e) { setStatus(st, e.message || "La signature n'a pas pu être enregistrée.", "err"); go.disabled = false; }
   };

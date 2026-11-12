@@ -97,18 +97,18 @@ async function mailAndLog(env, requestId, signerId, kind, msg) {
   return res;
 }
 
-async function sendInvite(env, base, requestId, signer) {
+async function sendInvite(env, base, requestId, signer, reminder = false) {
   const p = (await getSetting(env, "profile")) || {};
   const r = await env.DB.prepare("SELECT title, documents FROM requests WHERE id = ?").bind(requestId).first();
   if (!signer.email) return;
   const docs = parse(r.documents) || [];
   const docList = docs.length > 1 ? `<br><br>Documents à signer :<br>${docs.map(x => "• " + esc(x.name)).join("<br>")}` : "";
   const link = new URL(`/s/${signer.token}`, base).href;
-  const html = mailLayout(p, {title: "Document à signer",
+  const html = mailLayout(p, {title: reminder ? "Rappel : document en attente de signature" : "Document à signer",
     intro: `Bonjour ${esc(signer.name)},<br><br>${esc(p.company || "Nous")} vous invite à signer électroniquement ${docs.length > 1 ? "le dossier" : "le document"} « <b>${esc(r.title)}</b> ».${docList}<br><br>Lisez tout puis signez depuis votre téléphone ou votre ordinateur. Cela prend une minute.`,
     button: "Lire et signer le document", buttonUrl: link,
     small: "Ce lien est personnel : ne le transférez pas. Une fois que toutes les parties auront signé, vous recevrez automatiquement le document signé par email."});
-  await mailAndLog(env, requestId, signer.id, "invitation", {to: signer.email, toName: signer.name, subject: `Document à signer : ${r.title}`, html, text: plain(html), replyTo: p.email || undefined});
+  await mailAndLog(env, requestId, signer.id, reminder ? "reminder" : "invitation", {to: signer.email, toName: signer.name, subject: `${reminder ? "Rappel" : "Document à signer"} : ${r.title}`, html, text: plain(html), replyTo: p.email || undefined});
 }
 
 async function notifyOwnerSigned(env, base, s, declaredName) {
@@ -148,6 +148,39 @@ async function sendFinal(env, base, requestId) {
   }
 }
 
+// ---------------- code de vérification par email ----------------
+const maskEmail = e => String(e || "").replace(/^(.)(.*)(.@.*)$/, (m, a, b, c) => a + "•".repeat(Math.min(b.length, 6)) + c);
+const needsCode = (env, s) => emailReady(env) && !!s.email;
+
+async function sendCode(env, req, base, s) {
+  if (s.otp_sent_at && Date.now() - Date.parse(s.otp_sent_at) < 45000) return err(429, "Patiente quelques secondes avant de demander un nouveau code.");
+  if (s.otp_sends >= 6) return err(429, "Trop de codes demandés. Contacte l'expéditeur du document.");
+  const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
+  const at = now(), exp = new Date(Date.now() + 10 * 60000).toISOString();
+  await env.DB.prepare("UPDATE signers SET otp_hash = ?, otp_expires_at = ?, otp_sent_at = ?, otp_sends = otp_sends + 1, otp_attempts = 0 WHERE id = ?")
+    .bind(await sha256(new TextEncoder().encode(s.id + ":" + code)), exp, at, s.id).run();
+  const p = (await getSetting(env, "profile")) || {};
+  const html = mailLayout(p, {title: "Ton code de vérification", intro: `Voici le code à saisir pour signer « <b>${esc(s.title)}</b> » :<br><br><span style="font-size:30px;font-weight:bold;letter-spacing:6px">${code}</span><br><br>Il est valable 10 minutes. Si tu n'as rien demandé, ignore ce message.`});
+  const res = await mailAndLog(env, s.request_id, s.id, "code", {to: s.email, toName: s.name, subject: `Code de vérification : ${code}`, html, text: plain(html)});
+  return res.ok ? json({ok: true, sentTo: maskEmail(s.email)}) : err(502, "L'email n'a pas pu partir. Réessaie dans un instant.");
+}
+
+// ---------------- relances automatiques (tâche quotidienne) ----------------
+// 1re relance 2 jours après l'envoi, puis tous les 3 jours, 3 relances au maximum.
+async function runReminders(env) {
+  if (!emailReady(env)) return;
+  const base = await getSetting(env, "base_url"); if (!base) return;
+  const day = 86400000, t = Date.now();
+  const {results} = await env.DB.prepare(`SELECT s.*, r.created_at AS request_created FROM signers s JOIN requests r ON r.id = s.request_id
+    WHERE r.status = 'pending' AND s.status = 'waiting' AND s.email IS NOT NULL AND s.email != '' AND s.reminders < 3`).all();
+  for (const s of results) {
+    const last = Date.parse(s.last_reminder_at || s.request_created);
+    if (t - last < (s.last_reminder_at ? 3 : 2) * day - 3600000) continue;
+    await sendInvite(env, base, s.request_id, s, true);
+    await env.DB.prepare("UPDATE signers SET reminders = reminders + 1, last_reminder_at = ? WHERE id = ?").bind(now(), s.id).run();
+  }
+}
+
 // ---------------- signataire ----------------
 async function signerByToken(env, token) {
   if (!/^[a-f0-9]{48}$/.test(token)) return null;
@@ -166,7 +199,7 @@ async function handleSigner(req, env, parts, url, ctx) {
     }
     const profile = publicProfile(await getSetting(env, "profile"));
     return json({title: s.title, fileName: s.file_name, profile, status: s.request_status, originalHash: s.original_hash, finalHash: s.final_hash, documents: parse(s.documents) || [],
-      signer: {name: s.name, role: s.role, email: s.email, status: s.status, signedAt: s.signed_at, placements: parse(s.placements) || []}});
+      signer: {name: s.name, role: s.role, email: s.email, status: s.status, signedAt: s.signed_at, placements: parse(s.placements) || [], requiresCode: needsCode(env, s), emailMasked: maskEmail(s.email)}});
   }
   if (req.method === "GET" && action === "pdf") {
     const key = s.request_status === "final" ? `pdf:${s.request_id}:final` : `pdf:${s.request_id}:original`;
@@ -174,6 +207,11 @@ async function handleSigner(req, env, parts, url, ctx) {
     if (!body) return err(404, "Document introuvable.");
     if (s.request_status === "final" && url.searchParams.get("src") !== "mail") await logEvent(env, req, s.request_id, s.id, "downloaded_final");
     return pdfResponse(body, s.file_name);
+  }
+  if (req.method === "POST" && action === "code") {
+    if (s.status === "signed" || s.request_status !== "pending") return err(409, "Ce document n'attend plus ta signature.");
+    if (!needsCode(env, s)) return err(400, "Aucun code n'est nécessaire pour ce document.");
+    return sendCode(env, req, url, s);
   }
   if (req.method === "POST" && action === "viewed") {
     const d = parse(await req.text()) || {};
@@ -192,17 +230,26 @@ async function handleSigner(req, env, parts, url, ctx) {
     if (!declaredName) return err(400, "Indique ton nom complet.");
     if (d.consent !== true || !d.consentText) return err(400, "Le consentement est obligatoire.");
     if (d.documentHash !== s.original_hash) return err(409, "Le document a changé depuis son ouverture. Recharge la page.");
+    let verifiedAt = null;
+    if (needsCode(env, s)) {
+      if (!s.otp_hash) return err(400, "Demande d'abord ton code de vérification.");
+      if (s.otp_attempts >= 5) return err(429, "Trop d'essais. Demande un nouveau code.");
+      if (Date.parse(s.otp_expires_at) < Date.now()) return err(400, "Ce code a expiré. Demande un nouveau code.");
+      const ok = (await sha256(new TextEncoder().encode(s.id + ":" + String(d.code || "").replace(/\D/g, "")))) === s.otp_hash;
+      if (!ok) { await env.DB.prepare("UPDATE signers SET otp_attempts = otp_attempts + 1 WHERE id = ?").bind(s.id).run(); return err(400, "Code incorrect. Vérifie l'email reçu."); }
+      verifiedAt = now();
+    }
     let png;
     try { png = b64ToBytes(String(d.signature || "").replace(/^data:image\/png;base64,/, "")); } catch { return err(400, "Signature illisible."); }
     if (!png.byteLength || png.byteLength > MAX_PNG || !isPng(png.buffer)) return err(400, "Signature illisible.");
     const c = client(req), at = now();
     await env.FILES.put(`sig:${s.id}`, png);
     const res = await env.DB.prepare(`UPDATE signers SET status = 'signed', signed_at = ?, consent_at = ?, consent_text = ?, declared_name = ?, declared_id = ?, method = ?,
-      ip = ?, country = ?, city = ?, user_agent = ? WHERE id = ? AND status = 'waiting'`)
+      ip = ?, country = ?, city = ?, user_agent = ?, identity_verified_at = ?, otp_hash = NULL WHERE id = ? AND status = 'waiting'`)
       .bind(at, d.consentAt && !isNaN(Date.parse(d.consentAt)) ? d.consentAt : at, String(d.consentText).slice(0, 1000), declaredName, declaredId,
-        d.method === "type" ? "type" : "draw", c.ip, c.country, c.city, c.ua, s.id).run();
+        d.method === "type" ? "type" : "draw", c.ip, c.country, c.city, c.ua, verifiedAt, s.id).run();
     if (!res.meta.changes) return err(409, "Ce document a déjà été signé avec ce lien.");
-    await logEvent(env, req, s.request_id, s.id, "signed", {name: declaredName, idNumber: declaredId, signatureSha256: await sha256(png), documentSha256: s.original_hash});
+    await logEvent(env, req, s.request_id, s.id, "signed", {name: declaredName, idNumber: declaredId, signatureSha256: await sha256(png), documentSha256: s.original_hash, identity: verifiedAt ? "code email" : "lien personnel"});
     ctx.waitUntil(notifyOwnerSigned(env, url, s, declaredName));
     return json({ok: true, signedAt: at});
   }
@@ -222,6 +269,7 @@ async function handleAdmin(req, env, parts, url, ctx) {
   if (!isAdmin(req, env)) return err(401, "Code d'accès incorrect.");
   const [res, id, sub] = parts;
 
+  if ((await getSetting(env, "base_url")) !== url.origin) await setSetting(env, "base_url", url.origin);
   if (res === "check") return json({ok: true});
 
   if (res === "settings") {
@@ -373,6 +421,7 @@ async function handleAdmin(req, env, parts, url, ctx) {
 }
 
 export default {
+  async scheduled(event, env, ctx) { ctx.waitUntil(runReminders(env)); },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const parts = url.pathname.split("/").filter(Boolean);

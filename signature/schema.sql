@@ -32,7 +32,15 @@ CREATE TABLE IF NOT EXISTS signers (
   ip TEXT,
   country TEXT,
   city TEXT,
-  user_agent TEXT
+  user_agent TEXT,
+  otp_hash TEXT,                              -- code de vérification (empreinte), jamais en clair
+  otp_expires_at TEXT,
+  otp_sent_at TEXT,
+  otp_sends INTEGER NOT NULL DEFAULT 0,
+  otp_attempts INTEGER NOT NULL DEFAULT 0,
+  identity_verified_at TEXT,
+  reminders INTEGER NOT NULL DEFAULT 0,
+  last_reminder_at TEXT
 );
 CREATE INDEX IF NOT EXISTS signers_request ON signers(request_id);
 CREATE TABLE IF NOT EXISTS events (

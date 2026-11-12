@@ -16,3 +16,7 @@ database_id = "REMPLACER_PAR_ID_D1"
 [[kv_namespaces]]
 binding = "FILES"
 id = "REMPLACER_PAR_ID_KV"
+
+# Relances automatiques des signataires, chaque matin (heure UTC)
+[triggers]
+crons = ["17 8 * * *"]

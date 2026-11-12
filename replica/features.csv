@@ -2,7 +2,7 @@ feature,area,priority,original,clone,notes
 Fusionner plusieurs PDF,organiser,must,yes,yes,Atelier PDF > Fusionner
 Réorganiser tourner supprimer des pages,organiser,must,yes,yes,Atelier PDF > Organiser les pages
 Extraire ou découper des pages,organiser,must,yes,yes,Atelier PDF > Découper (plages ou une page par fichier)
-Compresser un PDF,organiser,must,yes,partial,les pages deviennent des images : texte non sélectionnable après compression
+Compresser un PDF,organiser,must,yes,yes,mode « Garder le texte » : seules les images sont allégées ; mode « Tout en images » en option
 Modifier le texte existant,modifier,must,yes,partial,texte réécrit par-dessus en Helvetica : police d'origine non conservée et pas de remise en page du paragraphe
 Ajouter du texte,modifier,must,yes,yes,
 Surligner,annoter,must,yes,yes,
@@ -11,11 +11,11 @@ Faire signer à distance par lien,signer,must,yes,partial,construit et testé en
 Journal de preuve de la signature,signer,must,yes,yes,IP pays appareil heures serveur consentement empreintes SHA-256
 Notifications email (envoi du lien et copie signée),signer,must,yes,partial,construit et testé ; nécessite un nom de domaine et un compte Resend ou Brevo
 Remplir un formulaire PDF,formulaires,must,yes,partial,formulaires AcroForm oui ; formulaires XFA non
-Reconnaissance de texte d'un scan (OCR),convertir,must,yes,partial,texte récupéré en TXT Word ou PDF ; pas de couche de texte invisible ajoutée au PDF scanné
+Reconnaissance de texte d'un scan (OCR),convertir,must,yes,yes,"sur l'appareil, français espagnol anglais ; export TXT Word PDF texte ou PDF consultable"
 PDF vers Word,convertir,must,yes,partial,texte et titres seulement : ni images ni tableaux ni mise en page exacte
 Word vers PDF,convertir,must,yes,partial,titres paragraphes listes ; tableaux en texte ; ni images ni polices d'origine
 Images ou photos vers PDF,convertir,must,yes,yes,
-Scanner un papier avec le téléphone,convertir,must,yes,partial,photo + effet scan ; pas de détection automatique des bords ni de recadrage
+Scanner un papier avec le téléphone,convertir,must,yes,yes,"photo, détection automatique de la feuille, 4 coins ajustables, redressement, effet scan"
 PDF vers images,convertir,must,yes,yes,PNG ou JPG en ZIP
 Filigrane,modifier,should,yes,yes,texte ou logo
 Numéros de page,modifier,should,yes,yes,
@@ -24,12 +24,12 @@ Masquer définitivement (caviardage),protéger,should,yes,partial,boîte noire p
 Protéger par mot de passe,protéger,should,yes,no,
 Signature certifiée (certificat numérique),signer,should,yes,yes,sceau PAdES ; reconnu par Adobe seulement avec un certificat officiel importé (FNMT)
 Plusieurs documents dans un même envoi,signer,should,yes,yes,
-Relances automatiques des signataires,signer,should,yes,no,renvoi manuel seulement
-Vérification d'identité du signataire (code email ou SMS),signer,should,yes,no,
+Relances automatiques des signataires,signer,should,yes,yes,"J+2 puis tous les 3 jours, 3 au maximum (tâche quotidienne du serveur) ; actif une fois en ligne avec les emails"
+Vérification d'identité du signataire (code email ou SMS),signer,should,yes,partial,code à usage unique par email ; pas de SMS
 Notes et commentaires,annoter,should,yes,no,
 Créer un formulaire à remplir (ajout de champs),formulaires,should,yes,no,
 Modèles réutilisables pour les envois à signer,signer,should,yes,no,
-Rendre un scan consultable (texte sélectionnable dans le PDF),convertir,should,yes,no,
+Rendre un scan consultable (texte sélectionnable dans le PDF),convertir,should,yes,yes,Lire un scan > PDF consultable : image + texte invisible aux mêmes endroits
 Comparer deux versions d'un PDF,outils,could,yes,no,
 PDF vers Excel ou PowerPoint,convertir,could,yes,no,
 Modifier les images d'un PDF,modifier,could,yes,no,

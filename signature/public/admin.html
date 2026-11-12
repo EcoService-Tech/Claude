@@ -114,7 +114,7 @@ async function viewDetail(id) {
     const ev = d.events.filter(e => e.signer_id === s.id && (e.type === "email_sent" || e.type === "email_failed")).pop();
     if (!ev) return `Email : ${s.email}`;
     const k = ev.detail ? JSON.parse(ev.detail).kind : "";
-    const what = k === "final_copy" ? ["Copie signée", "envoyée"] : ["Lien", "envoyé"];
+    const what = k === "final_copy" ? ["Copie signée", "envoyée"] : k === "reminder" ? ["Relance", "envoyée"] : k === "code" ? ["Code de vérification", "envoyé"] : ["Lien", "envoyé"];
     return `${ev.type === "email_sent" ? "✓" : "✗"} ${what[0]} ${ev.type === "email_sent" ? what[1] : "non " + what[1]} à ${s.email} · ${fmtDate(ev.at)}`;
   }
   const resend = s => h("button", {class: "btn ghost small", type: "button", onclick: async e => { e.target.disabled = true; try { await api(`/requests/${d.id}/remind?signer=${s.id}`, {method: "POST"}); setStatus(st, `Email renvoyé à ${s.email}.`, "ok"); } catch (er) { setStatus(st, er.message, "err"); } e.target.disabled = false; }}, d.status === "final" ? "Renvoyer la copie" : "Renvoyer l'email");
@@ -224,6 +224,7 @@ async function certificate(doc, d, {F, B, M, stampImg, sealed, when}) {
     line(`Contact utilisé pour l'envoi du lien personnel : ${[s.phone, s.email].filter(Boolean).join(" · ") || "non renseigné"}`);
     line(`Lien ouvert pour la première fois le : ${fmtDateLong(s.first_opened_at)}`);
     if (rd) line(`Lecture : ${rd.pages || "?"} page(s) affichée(s), ${rd.seconds || "?"} secondes avant de signer.`);
+    line(s.identity_verified_at ? `Identité vérifiée par code à usage unique envoyé à ${s.email}, saisi le : ${fmtDateLong(s.identity_verified_at)}` : "Identité : lien personnel envoyé à l'adresse ou au numéro ci-dessus (sans code de vérification).");
     line(`Consentement coché le : ${fmtDateLong(s.consent_at)}`);
     line(`Signature enregistrée par le serveur le : ${fmtDateLong(s.signed_at)}`, {f: B, size: 9.5});
     line(`Adresse IP : ${s.ip || "?"} · Localisation approximative : ${[s.city, s.country].filter(Boolean).join(", ") || "?"}`);
@@ -373,7 +374,7 @@ function emailPanel() {
   const test = h("button", {class: "btn ghost", type: "button", onclick: async () => { test.disabled = true; setStatus(st, "Envoi…"); try { const r = await api("/test-email", {method: "POST"}); setStatus(st, `Email de test envoyé à ${r.to}. Vérifie aussi les spams.`, "ok"); } catch (er) { setStatus(st, er.message, "err"); } test.disabled = false; }}, "M'envoyer un email de test");
   return h("section", {class: "panel"}, h("h2", {}, "Emails automatiques"),
     e.configured
-      ? h("p", {style: "margin:0"}, `Actif via ${e.provider === "brevo" ? "Brevo" : "Resend"}, expéditeur ${e.from}. Les liens partent automatiquement, tu es prévenu à ${e.ownerEmail || "ton email de contact"} à chaque signature, et chaque signataire reçoit le document signé.`)
+      ? h("p", {style: "margin:0"}, `Actif via ${e.provider === "brevo" ? "Brevo" : "Resend"}, expéditeur ${e.from}. Les liens partent automatiquement, tu es prévenu à ${e.ownerEmail || "ton email de contact"} à chaque signature, et chaque signataire reçoit le document signé. Chaque signataire confirme son identité avec un code reçu par email. Sans signature, il reçoit une relance 2 jours après l'envoi, puis tous les 3 jours (3 relances au maximum).`)
       : h("p", {class: "note"}, "Pas encore configuré. Ajoute les secrets EMAIL_PROVIDER, EMAIL_API_KEY et EMAIL_FROM dans GitHub, puis relance la mise en ligne (voir le guide)."),
     e.configured ? h("div", {class: "row"}, test) : null, st);
 }
