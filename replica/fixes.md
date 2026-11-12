@@ -63,3 +63,46 @@ C. **Pour ceux qui perdent des clients à cause des connexions et des applicatio
 **Recommandation : A**, en reprenant les arguments de B et de C. A est le seul angle où tu as un avantage que les grands n'ont pas : tu connais le métier. Mais la partie « salles de sport » repose sur des preuves minces (peu d'avis de gérants). Avant d'investir, valide-la en parlant à 10 gérants de salles à Valence.
 
 Ne mets pas le nom d'Acrobat, de DocuSign ou de Mindbody dans ta marque, tes publicités ou ta fiche d'application. Une page de comparaison factuelle est une question juridique : demande à un avocat espagnol.
+
+## 4. Fonctions réclamées qu'aucune de ces applications ne propose
+
+Méthode : 268 avis à 3 étoiles ou moins qui signalent un manque (« no way to », « unable to », « I wish », « impossible de », « no permite », « falta »…), lus un par un ; les simples bugs ont été écartés. Le nombre donné est celui des avis distincts. **Mince** = moins de 3 avis ou un seul pays.
+
+| # | Fonction manquante | Avis | Où | Chez toi | Effort |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Le membre résilie ou suspend son adhésion lui-même | ~10 | Glofox, US GB ES | à construire | M |
+| 2 | Signer avec son certificat électronique officiel (FNMT, DNIe) | 5 | Acrobat, Espagne + HN | seulement le sceau de l'entreprise | L |
+| 3 | Décharges et questionnaires obligatoires, impossibles à oublier | 5 | Mindbody, Glofox, US | modèles à faire | M |
+| 4 | Signature sur place, sur la tablette de l'accueil, sans email automatique | 4 | Acrobat Sign, US | possible avec l'Atelier, pas dans l'Espace signature | S |
+| 5 | Suivi des envois : statut de chaque signataire, recherche | 4 | Acrobat Sign, US GB | déjà fait (tableau de bord) | — |
+| 6 | Désactiver l'IA et ses bandeaux imposés | 4 | Acrobat, US GB FR ES | déjà : aucune IA imposée | — |
+| 7 | Réservations récurrentes | 3 | Mindbody, US | hors périmètre (réservation) | — |
+| 8 | Liste d'attente avec alerte quand une place se libère | 3 | Trainingym, Glofox, ES US | hors périmètre (réservation) | — |
+| 9 | Synchronisation avec l'agenda du téléphone | 3 | Mindbody, Glofox, US GB | hors périmètre | — |
+| 10 | Signer soi-même sans envoyer à personne | 3 | Acrobat Sign, US ES | déjà (Atelier > Signer) | — |
+| 11 | Refuser de signer, avec un motif | 2 (mince) | DocuSign, US GB | à construire | S |
+| 12 | Remplir des champs (date, cases à cocher) au moment de signer | 2 (mince) | DocuSign, Acrobat Sign | à construire | M |
+| 13 | Reprendre plus tard un long formulaire | 2 (mince) | DocuSign | à construire | S |
+| 14 | Relances automatiques | 2 (mince) | Acrobat Sign | déjà fait | — |
+| 15 | Enregistrer sur le téléphone plutôt que dans le cloud | 2 (mince) | Acrobat, FR | déjà : tout reste sur l'appareil | — |
+| 16 | Récupérer les données de ses membres en quittant le logiciel | 1 (mince) | Mindbody | à prévoir : export complet | S |
+| 17 | Alerte avant la fin d'un pack de séances | 1 (mince) | Mindbody | hors périmètre (facturation) | — |
+| 18 | Noter charges, poids et records à chaque exercice | 7 | Trainingym, PushPress, ES US | autre produit (suivi d'entraînement) | — |
+
+Citations (texte exact, lien vers l'avis) :
+- (1) « The app does not allow you to cancel or put membership on hold. » — [avis](https://apps.apple.com/gb/app/id916224471?see-all=reviews#review-10622814889) · « Easy to set up membership from the app but then no way to cancel. Apparently that has to be done in writing. » — [avis](https://apps.apple.com/gb/app/id916224471?see-all=reviews#review-7760253384)
+- (2) « No deja firmar documentos con la firma electrónica emitida por la fábrica nacional de moneda y timbre » — [avis](https://apps.apple.com/es/app/id469337564?see-all=reviews#review-14390148042) · « No permite firmar con certificado digital. » — [avis](https://apps.apple.com/es/app/id481082197?see-all=reviews#review-5352241447)
+- (3) « we are no longer prompted (nor can we force) a liability waiver signature for new students » — [avis](https://apps.apple.com/us/app/id599125654?see-all=reviews#review-4038523096)
+- (4) « when we create the contact it sends them an email immediately and there is no way to turn this off » — [avis](https://apps.apple.com/us/app/id481082197?see-all=reviews#review-1336782907)
+- (6) « No option to disable the GenAI header that opens on every document I open. » — [avis](https://apps.apple.com/gb/app/id469337564?see-all=reviews#review-13790766541)
+- (8) « Debería tener una opción de “lista de espera” para notificar las cancelaciones » — [avis](https://apps.apple.com/es/app/id598249672?see-all=reviews#review-9696053432)
+- (11) « No option to reject a document via the app. » — [avis](https://apps.apple.com/gb/app/id474990205?see-all=reviews#review-9352259229)
+- (16) « They still refuse to furnish our members’ data » — [avis](https://apps.apple.com/us/app/id599125654?see-all=reviews#review-8965240261)
+
+### Les meilleures opportunités pour toi
+
+1. **Résiliation et suspension en libre-service, signées et horodatées** (n°1). C'est la plainte « fonction absente » la plus répétée côté salles, et elle colle à ton angle « sans enfermement ». Le membre envoie sa demande, la salle la valide, et les deux reçoivent un document signé. Vérifie avec un avocat ce que la loi espagnole impose pour la résiliation des adhésions.
+2. **Signature par certificat officiel espagnol** (n°2). C'est spécifique à l'Espagne, peu servi par les grands outils, et une vraie différence sur ton marché. Faisable via l'application gratuite AutoFirma ; c'est le plus gros chantier de la liste.
+3. **Dossier d'adhésion « incontournable »** (n°3) : la première réservation reste bloquée tant que le contrat, la décharge et le questionnaire de santé ne sont pas signés.
+4. **Mode « signer ici, maintenant »** (n°4) : le client signe sur la tablette de l'accueil, sans email automatique.
+5. **Refuser de signer, avec un motif** (n°11), et **export complet des données** (n°16) : petits chantiers, bons arguments de confiance.

@@ -48,3 +48,9 @@ Prix unique sans fonctions de base bridées,abonnement,must,no,no,228 avis sur l
 Modèles de dossier d'adhésion (contrat règlement RGPD santé décharge),salle de sport,must,no,no,décharges : 4 avis + métier
 "Résiliation ou suspension d'adhésion par le membre, signée",salle de sport,should,no,no,environ 6 avis Glofox
 Pack de signatures à l'unité,abonnement,could,no,no,2 avis DocuSign
+Signature par certificat officiel espagnol (FNMT DNIe) pour les signataires,signer,should,no,no,5 avis ES + HN ; via AutoFirma
+Blocage tant que le dossier d'adhésion n'est pas signé,salle de sport,should,no,no,décharges : 5 avis
+Mode signer ici maintenant (tablette de l'accueil),signer,should,no,no,4 avis Acrobat Sign
+Refuser de signer avec un motif,signer,should,no,no,2 avis DocuSign (mince)
+Champs à remplir par le signataire (date cases),signer,should,no,no,2 avis (mince)
+Export complet des données,partage,could,no,no,1 avis Mindbody (mince) ; argument anti-enfermement
