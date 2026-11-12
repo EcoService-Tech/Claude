@@ -460,34 +460,97 @@ function toolSplit(body, st) {
 /* =========================================================
    4. Compresser
    ========================================================= */
+/* Allège seulement les images du PDF : le texte, les liens et les formulaires restent intacts. */
+async function compressImages(buf, {maxDim, q}) {
+  const {PDFName, PDFRawStream, PDFArray, PDFNumber, decodePDFRawStream} = PDFLib;
+  const doc = await PDFDocument.load(buf, {ignoreEncryption: true, updateMetadata: false});
+  const ctx = doc.context, N = k => PDFName.of(k);
+  let done = 0, seen = 0;
+  const nameOf = v => v instanceof PDFArray ? (v.size() === 1 ? v.get(0).toString() : "multi") : v ? v.toString() : "";
+  const colorOk = cs => {
+    const c = cs instanceof PDFArray ? null : cs;
+    if (c) return ["/DeviceRGB", "/DeviceGray"].includes(c.toString());
+    const arr = cs; if (!(arr instanceof PDFArray) || arr.get(0).toString() !== "/ICCBased") return false;
+    const icc = ctx.lookup(arr.get(1)); const n = icc?.dict?.get(N("N")); return n && [1, 3].includes(n.asNumber());
+  };
+  for (const [ref, obj] of ctx.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFRawStream) || obj.dict.get(N("Subtype"))?.toString() !== "/Image") continue;
+    const d = obj.dict;
+    if (d.get(N("ImageMask")) || d.get(N("Decode")) || d.get(N("SMaskInData"))) continue;
+    const W = d.get(N("Width"))?.asNumber(), H = d.get(N("Height"))?.asNumber(), bpc = d.get(N("BitsPerComponent"))?.asNumber();
+    const cs = ctx.lookup(d.get(N("ColorSpace")));
+    if (!W || !H || W * H < 40000 || !colorOk(cs)) continue;
+    seen++;
+    const filter = nameOf(d.get(N("Filter")));
+    let source;
+    try {
+      if (filter === "/DCTDecode") source = await createImageBitmap(new Blob([obj.contents], {type: "image/jpeg"}));
+      else if (filter === "/FlateDecode" && bpc === 8 && !d.get(N("DecodeParms"))) {
+        const raw = decodePDFRawStream(obj).decode(), comps = raw.length / (W * H);
+        if (comps !== 1 && comps !== 3) continue;
+        const id = new ImageData(W, H);
+        for (let i = 0, j = 0; i < W * H; i++, j += comps) { const r = raw[j], g = comps === 3 ? raw[j + 1] : r, b = comps === 3 ? raw[j + 2] : r; id.data.set([r, g, b, 255], i * 4); }
+        source = await createImageBitmap(id);
+      } else continue;
+    } catch { continue; }
+    const k = Math.min(1, maxDim / Math.max(W, H)), w = Math.max(1, Math.round(W * k)), hh = Math.max(1, Math.round(H * k));
+    const c = document.createElement("canvas"); c.width = w; c.height = hh;
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, w, hh); g.drawImage(source, 0, 0, w, hh);
+    const jpg = new Uint8Array(await canvasBytes(c, "image/jpeg", q));
+    c.width = c.height = 0;
+    if (jpg.length >= obj.contents.length * .9) continue;
+    const nd = d.clone(ctx);
+    nd.set(N("Filter"), N("DCTDecode")); nd.set(N("Width"), PDFNumber.of(w)); nd.set(N("Height"), PDFNumber.of(hh));
+    nd.set(N("BitsPerComponent"), PDFNumber.of(8)); nd.set(N("ColorSpace"), N("DeviceRGB")); nd.set(N("Length"), PDFNumber.of(jpg.length));
+    nd.delete(N("DecodeParms"));
+    ctx.assign(ref, PDFRawStream.of(nd, jpg));
+    done++;
+  }
+  return {bytes: await doc.save({useObjectStreams: true}), done, seen};
+}
+
 function toolCompress(body, st) {
-  let file = null, level = "moy";
-  const LV = {forte: {s: 1.1, q: .5}, moy: {s: 1.5, q: .65}, legere: {s: 2, q: .8}};
+  let file = null, level = "moy", mode = "texte";
+  const LV = {forte: {s: 1.1, q: .5, dim: 1200}, moy: {s: 1.5, q: .65, dim: 1800}, legere: {s: 2, q: .8, dim: 2600}};
   const go = h("button", {class: "btn", type: "button", disabled: true}, "Compresser");
   const out = h("div");
+  const note = h("p", {class: "note"});
+  const NOTES = {texte: "Les photos et images sont allégées. Le texte reste net et sélectionnable, et les formulaires restent remplissables.",
+    image: "Chaque page devient une image : souvent le plus léger, mais le texte ne se sélectionne plus. À utiliser aussi pour effacer pour de bon ce que tu as masqué en noir dans « Modifier le texte »."};
+  note.textContent = NOTES.texte;
   go.onclick = async () => {
     go.disabled = true; out.replaceChildren();
     try {
-      const js = await openJs(await readBuf(file)), doc = await PDFDocument.create(), {s, q} = LV[level];
-      for (let n = 1; n <= js.numPages; n++) {
-        setStatus(st, `Page ${n} / ${js.numPages}…`);
-        const {canvas, page} = await renderToCanvas(js, n, s);
-        const vp = page.getViewport({scale: 1});
-        const img = await doc.embedJpg(await canvasBytes(canvas, "image/jpeg", q));
-        doc.addPage([vp.width, vp.height]).drawImage(img, {x: 0, y: 0, width: vp.width, height: vp.height});
-        canvas.width = canvas.height = 0;
+      const {s, q, dim} = LV[level], buf = await readBuf(file);
+      let bytes, info = "";
+      if (mode === "texte") {
+        setStatus(st, "Allègement des images…");
+        const r = await compressImages(buf, {maxDim: dim, q});
+        bytes = r.bytes;
+        info = r.seen ? ` ${r.done} image${r.done > 1 ? "s" : ""} allégée${r.done > 1 ? "s" : ""} sur ${r.seen}.` : " Ce PDF ne contient pas de grandes images.";
+      } else {
+        const js = await openJs(buf), doc = await PDFDocument.create();
+        for (let n = 1; n <= js.numPages; n++) {
+          setStatus(st, `Page ${n} / ${js.numPages}…`);
+          const {canvas, page} = await renderToCanvas(js, n, s);
+          const vp = page.getViewport({scale: 1});
+          const img = await doc.embedJpg(await canvasBytes(canvas, "image/jpeg", q));
+          doc.addPage([vp.width, vp.height]).drawImage(img, {x: 0, y: 0, width: vp.width, height: vp.height});
+          canvas.width = canvas.height = 0;
+        }
+        bytes = await doc.save();
       }
-      const bytes = await doc.save();
       const gain = Math.round((1 - bytes.byteLength / file.size) * 100);
+      if (gain <= 0) { setStatus(st, `Le fichier n'est pas plus léger.${info} Essaie le niveau « Forte »${mode === "texte" ? " ou le mode « Tout en images »" : ""}, ou garde l'original.`, "err"); go.disabled = false; return; }
       out.replaceChildren(resultBox(baseName(file.name) + "-compresse.pdf", bytes, st));
-      setStatus(st, gain > 0 ? `${fmtSize(file.size)} → ${fmtSize(bytes.byteLength)} (−${gain} %).` : `Le fichier n'est pas plus léger (${fmtSize(bytes.byteLength)}). Essaie le niveau « Forte » ou garde l'original.`, gain > 0 ? "ok" : "err");
+      setStatus(st, `${fmtSize(file.size)} → ${fmtSize(bytes.byteLength)} (−${gain} %).${info}`, "ok");
     } catch { setStatus(st, "La compression a échoué.", "err"); }
     go.disabled = false;
   };
   body.append(dropZone({onFiles: fs => { file = fs[0]; go.disabled = false; setStatus(st, `${file.name} · ${fmtSize(file.size)}`); }}),
+    fieldBox("Méthode", seg([["texte", "Garder le texte"], ["image", "Tout en images"]], mode, v => { mode = v; note.textContent = NOTES[v]; })),
     fieldBox("Niveau", seg([["forte", "Forte"], ["moy", "Moyenne"], ["legere", "Légère"]], level, v => level = v)),
-    h("p", {class: "note"}, "Chaque page devient une image : le fichier est bien plus léger, mais le texte ne se sélectionne plus. Ça efface aussi pour de bon ce que tu as masqué en noir dans « Modifier le texte »."),
-    h("div", {class: "row"}, go), out);
+    note, h("div", {class: "row"}, go), out);
 }
 
 /* =========================================================
@@ -502,7 +565,7 @@ function toolEdit(body, st) {
   const viewer = makeViewer({onRender: renderOverlay});
   const ov = viewer.overlay;
   const hint = h("p", {class: "note"});
-  const HINTS = {edit: "Touche un mot ou une ligne pour le corriger. Valide avec Entrée.", add: "Touche la page là où tu veux écrire.", hl: "Fais glisser pour surligner une zone.", box: "Fais glisser pour masquer une zone. Le texte reste dessous : passe ensuite le fichier dans « Compresser » pour l'effacer pour de bon."};
+  const HINTS = {edit: "Touche un mot ou une ligne pour le corriger. Valide avec Entrée.", add: "Touche la page là où tu veux écrire.", hl: "Fais glisser pour surligner une zone.", box: "Fais glisser pour masquer une zone. Le texte reste dessous : passe ensuite le fichier dans « Compresser », mode « Tout en images », pour l'effacer pour de bon."};
   const setMode = v => { mode = v; ov.className = "overlay mode-" + v; hint.textContent = HINTS[v]; viewer.redraw(); };
   const sizeSel = h("select", {}, [8, 10, 11, 12, 14, 16, 18, 24, 32].map(s => h("option", {value: s, selected: s === 12}, s + " pt")));
   sizeSel.onchange = () => size = +sizeSel.value;
@@ -1133,8 +1196,26 @@ async function getOcr(lang, onProgress) {
   ocrLang = lang;
   return ocrWorker;
 }
+/* Scan consultable : l'image de chaque page, avec le texte reconnu placé dessous, invisible, aux mêmes endroits. */
+async function searchablePdf(pages) {
+  const doc = await PDFDocument.create(), font = await doc.embedFont(StandardFonts.Helvetica);
+  for (const pg of pages) {
+    const W = pg.w / pg.k, H = pg.h / pg.k, page = doc.addPage([W, H]);
+    page.drawImage(await doc.embedJpg(pg.jpg), {x: 0, y: 0, width: W, height: H});
+    for (const w of pg.words) {
+      const t = safe(w.t).trim(); if (!t) continue;
+      const bw = (w.b.x1 - w.b.x0) / pg.k, bh = (w.b.y1 - w.b.y0) / pg.k, unit = font.widthOfTextAtSize(t, 1);
+      if (bw <= 0 || bh <= 0 || !unit) continue;
+      const size = Math.min(bw / unit, bh * 1.4);
+      page.drawText(t, {x: w.b.x0 / pg.k, y: H - w.b.y1 / pg.k + bh * .15, size, font, opacity: 0});
+    }
+  }
+  doc.setProducer("Atelier PDF");
+  return doc.save();
+}
+
 function toolOcr(body, st) {
-  let file = null, lang = "fra+spa";
+  let file = null, lang = "fra+spa", scanPages = [];
   const go = h("button", {class: "btn", type: "button", disabled: true}, "Lire le texte");
   const area = h("textarea", {id: "ocrText", placeholder: "Le texte reconnu apparaîtra ici. Tu peux le corriger avant de l'enregistrer."});
   const acts = h("div", {class: "row"}); acts.hidden = true;
@@ -1142,10 +1223,11 @@ function toolOcr(body, st) {
     if (f.type.startsWith("image/")) {
       const bmp = await createImageBitmap(f, {imageOrientation: "from-image"}); const k = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
       const c = document.createElement("canvas"); c.width = bmp.width * k; c.height = bmp.height * k; c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      c.pxPerPt = Math.max(c.width / 595.28, c.height / 841.89, 1); // la photo tient dans une page A4
       return [c];
     }
     const js = await openJs(await readBuf(f)), out = [];
-    for (let n = 1; n <= Math.min(js.numPages, 30); n++) { const {canvas} = await renderToCanvas(js, n, 2.2); out.push(canvas); }
+    for (let n = 1; n <= Math.min(js.numPages, 30); n++) { const {canvas} = await renderToCanvas(js, n, 2.2); canvas.pxPerPt = 2.2; out.push(canvas); }
     return out;
   }
   go.onclick = async () => {
@@ -1157,11 +1239,13 @@ function toolOcr(body, st) {
         if (m.status === "recognizing text") setStatus(st, `Lecture de la page ${cur} / ${pages.length} : ${Math.round(m.progress * 100)} %`);
         else if (/load|initializ/.test(m.status)) setStatus(st, "Préparation du moteur de lecture…");
       });
-      const parts = [];
+      const parts = []; scanPages = [];
       for (const [i, c] of pages.entries()) {
         cur = i + 1;
-        const {data} = await w.recognize(c);
+        const {data} = await w.recognize(c, {}, {text: true, blocks: true});
         parts.push(data.text.replace(/\n{3,}/g, "\n\n").trim()); area.value = parts.join("\n\n— — —\n\n");
+        const words = (data.blocks || []).flatMap(b => b.paragraphs.flatMap(pa => pa.lines.flatMap(l => l.words)));
+        scanPages.push({jpg: await canvasBytes(c, "image/jpeg", .8), w: c.width, h: c.height, k: c.pxPerPt, words: words.map(x => ({t: x.text, b: x.bbox}))});
         c.width = 0;
       }
       acts.hidden = false;
@@ -1171,9 +1255,11 @@ function toolOcr(body, st) {
   };
   const copyBtn = h("button", {class: "btn ghost small", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(area.value); setStatus(st, "Texte copié.", "ok"); } catch { area.select(); setStatus(st, "Sélectionné : copie-le avec ton appareil."); } }}, "Copier");
   acts.append(
-    h("button", {class: "btn small", type: "button", onclick: async () => saveFile(baseName(file.name) + "-texte.docx", await makeDocx(area.value.split(/\n{2,}/).map(t => t.trim() === "— — —" ? {pageBreak: true} : {text: t.replace(/\n/g, " ")})), st)}, "Enregistrer en Word"),
-    h("button", {class: "btn ghost small", type: "button", onclick: async () => saveFile(baseName(file.name) + "-texte.pdf", await blocksToPdf(area.value.split(/\n/).map(t => t.trim() === "— — —" ? {pageBreak: true} : {text: t})), st)}, "Enregistrer en PDF"),
-    h("button", {class: "btn ghost small", type: "button", onclick: () => saveFile(baseName(file.name) + "-texte.txt", area.value, st)}, "Enregistrer en TXT"),
+    h("span", {style: "font-size:.85rem;color:var(--muted)"}, "Enregistrer :"),
+    h("button", {class: "btn small", type: "button", onclick: async () => saveFile(baseName(file.name) + "-consultable.pdf", await searchablePdf(scanPages), st)}, "PDF consultable"),
+    h("button", {class: "btn ghost small", type: "button", onclick: async () => saveFile(baseName(file.name) + "-texte.docx", await makeDocx(area.value.split(/\n{2,}/).map(t => t.trim() === "— — —" ? {pageBreak: true} : {text: t.replace(/\n/g, " ")})), st)}, "Word"),
+    h("button", {class: "btn ghost small", type: "button", onclick: async () => saveFile(baseName(file.name) + "-texte.pdf", await blocksToPdf(area.value.split(/\n/).map(t => t.trim() === "— — —" ? {pageBreak: true} : {text: t})), st)}, "PDF texte seul"),
+    h("button", {class: "btn ghost small", type: "button", onclick: () => saveFile(baseName(file.name) + "-texte.txt", area.value, st)}, "TXT"),
     copyBtn);
   body.append(
     h("div", {class: "row"},
