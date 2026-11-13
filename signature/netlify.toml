@@ -1,0 +1,29 @@
+# Espace signature sur Netlify. Le site est déjà construit (dossier public/) : pas de commande de build.
+[build]
+  publish = "public"
+  command = ""
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# pages de signature et de suivi des demandes : même page pour tous les liens
+[[redirects]]
+  from = "/s/*"
+  to = "/signer.html"
+  status = 200
+
+[[redirects]]
+  from = "/m/*"
+  to = "/resiliation.html"
+  status = 200
+
+[[redirects]]
+  from = "/resiliation"
+  to = "/resiliation.html"
+  status = 200
+
+[[redirects]]
+  from = "/signer"
+  to = "/signer.html"
+  status = 200

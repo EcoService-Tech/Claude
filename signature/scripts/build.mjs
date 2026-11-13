@@ -36,4 +36,6 @@ const skeleton = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><me
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>`;
 html = skeleton + html.replace("<header class=\"top\">", "<header class=\"top\">") + "</body></html>";
 fs.writeFileSync(pub("outils.html"), html);
+// schéma de la base, embarqué pour la version Netlify
+fs.writeFileSync(path.join(root, "src/schema.js"), "// Généré par scripts/build.mjs à partir de schema.sql\nexport default " + JSON.stringify(fs.readFileSync(path.join(root, "schema.sql"), "utf8")) + ";\n");
 console.log("build ok");

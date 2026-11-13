@@ -1,6 +1,4 @@
 node_modules/
 .wrangler/
 .dev.vars
-public/vendor/
-public/ocr/
-public/outils.html
+.netlify/
