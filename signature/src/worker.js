@@ -26,10 +26,16 @@ function timingSafeEqual(a, b) {
   let d = 0; for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i];
   return d === 0;
 }
-function isAdmin(req, env) {
+// Code d'accès : soit un secret du serveur (ADMIN_TOKEN), soit choisi à la première connexion (empreinte en base).
+async function adminHash(env) { const r = await env.DB.prepare("SELECT value FROM settings WHERE key = 'admin_hash'").first(); return r ? JSON.parse(r.value) : null; }
+async function isAdmin(req, env) {
   const h = req.headers.get("authorization") || "";
   const t = h.startsWith("Bearer ") ? h.slice(7) : "";
-  return !!env.ADMIN_TOKEN && t.length > 0 && timingSafeEqual(t, env.ADMIN_TOKEN);
+  if (!t) return false;
+  if (env.ADMIN_TOKEN) return timingSafeEqual(t, env.ADMIN_TOKEN);
+  const stored = await adminHash(env); if (!stored) return false;
+  const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(stored.salt + ":" + t)))].map(b => b.toString(16).padStart(2, "0")).join("");
+  return timingSafeEqual(digest, stored.hash);
 }
 async function readBody(req, max) {
   const len = +req.headers.get("content-length") || 0;
@@ -385,7 +391,7 @@ async function requestDetail(env, id) {
 }
 
 async function handleAdmin(req, env, parts, url, ctx) {
-  if (!isAdmin(req, env)) return err(401, "Code d'accès incorrect.");
+  if (!(await isAdmin(req, env))) return err(401, "Code d'accès incorrect.");
   const [res, id, sub] = parts;
 
   if ((await getSetting(env, "base_url")) !== url.origin) await setSetting(env, "base_url", url.origin);
@@ -642,6 +648,20 @@ export default {
       if (parts[1] === "s" && parts[2]) return await handleSigner(req, env, parts.slice(2), url, ctx);
       if (parts[1] === "m" && parts[2]) return await handleMember(req, env, parts.slice(2), url, ctx);
       if (parts[1] === "profile" && req.method === "GET") return json(publicProfile(await getSetting(env, "profile")));
+      if (parts[1] === "setup") {
+        // première connexion : le gérant choisit son code d'accès, une seule fois
+        const open = !env.ADMIN_TOKEN && !(await adminHash(env));
+        if (req.method === "GET") return json({needsSetup: open});
+        if (req.method === "POST") {
+          if (!open) return err(409, "Le code d'accès est déjà défini.");
+          const d = parse(await req.text()) || {}, code = String(d.code || "");
+          if (code.length < 12) return err(400, "Choisis un code d'au moins 12 caractères.");
+          const salt = randomId(16), hash = await sha256(new TextEncoder().encode(salt + ":" + code));
+          const r = await env.DB.prepare("INSERT INTO settings (key, value) VALUES ('admin_hash', ?) ON CONFLICT(key) DO NOTHING").bind(JSON.stringify({salt, hash, at: now()})).run();
+          if (!r.meta.changes) return err(409, "Le code d'accès est déjà défini.");
+          return json({ok: true});
+        }
+      }
       if (parts[1] === "admin") return await handleAdmin(req, env, parts.slice(2), url, ctx);
       return err(404, "Route inconnue.");
     } catch (e) {

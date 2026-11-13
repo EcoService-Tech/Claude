@@ -39,6 +39,22 @@ async function api(path, opts = {}) {
 }
 
 /* ---------- connexion ---------- */
+async function setup() {
+  $("#tabs").hidden = true;
+  const a = h("input", {type: "password", id: "c1", autocomplete: "new-password"}), b = h("input", {type: "password", id: "c2", autocomplete: "new-password"});
+  const st = h("div", {class: "status err"});
+  const go = async () => {
+    if (a.value.length < 12) return setStatus(st, "Au moins 12 caractères.", "err");
+    if (a.value !== b.value) return setStatus(st, "Les deux codes sont différents.", "err");
+    try { const r = await fetch("/api/setup", {method: "POST", body: JSON.stringify({code: a.value})}); if (!r.ok) throw new Error((await r.json()).error); TOKEN = a.value; store.set("adm", TOKEN); start(); }
+    catch (e) { setStatus(st, e.message, "err"); }
+  };
+  app.replaceChildren(h("section", {class: "panel", style: "max-width:460px"}, h("h2", {}, "Bienvenue ! Choisis ton code d'accès"),
+    h("p", {style: "margin:0;color:var(--muted)"}, "C'est le mot de passe de ton tableau de bord. Au moins 12 caractères. Note-le dans un endroit sûr : il ne pourra pas être affiché à nouveau."),
+    h("div", {class: "field"}, h("label", {for: "c1"}, "Code d'accès"), a), h("div", {class: "field"}, h("label", {for: "c2"}, "Retape-le"), b),
+    h("div", {class: "row"}, h("button", {class: "btn", type: "button", onclick: go}, "Enregistrer mon code")), st));
+  a.focus();
+}
 function login(msg) {
   $("#tabs").hidden = true; $("#logout").hidden = true;
   const code = h("input", {type: "password", id: "code", autocomplete: "current-password"});
@@ -654,7 +670,7 @@ function viewSettings() {
   drawPreview(); drawSeal();
 }
 
-if (TOKEN) start(); else login();
+if (TOKEN) start(); else fetch("/api/setup").then(r => r.json()).then(d => d.needsSetup ? setup() : login()).catch(() => login());
 </script>
 </body>
 </html>
