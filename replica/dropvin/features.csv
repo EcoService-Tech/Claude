@@ -1,0 +1,25 @@
+feature,area,priority,original,clone,notes
+Landing hero + champ lien,marketing,must,yes,no,identité propre obligatoire
+Vidéo démo,marketing,could,yes,no,à produire soi-même
+Stepper 3 étapes avec mockup téléphone,marketing,should,yes,no,
+Tarifs 3 plans + bascule mensuel/annuel,marketing,must,yes,no,
+FAQ accordéon,marketing,should,yes,no,
+Mentions légales / CGV / confidentialité,legal,must,no,no,absentes chez l'original; obligatoires en France
+Inscription email/mot de passe,auth,must,yes,no,
+Connexion + rester connecté,auth,must,yes,no,
+Mot de passe oublié,auth,must,no,no,absent chez l'original
+Ingestion lien AliExpress,core,must,yes,no,API affiliate plutôt que scraping
+Ingestion Temu/Shein via 3 captures,core,must,yes,no,lecture par vision IA
+Génération titre/description/hashtags,core,must,yes,no,LLM
+Prix conseillé depuis prix d'achat confirmé,core,must,yes,no,
+Visuel IA (1 à 3 par annonce),core,must,yes,no,coût par image décisif
+Décor Chez moi,core,should,yes,no,plan Booster
+Note produit /100 + marge estimée,core,should,yes,no,plan Booster; pondération à définir
+Copier l'annonce / télécharger les visuels,core,must,yes,no,
+Historique des annonces,app,should,inferred,no,
+Quotas journaliers par plan,billing,must,yes,no,
+Stripe Checkout + portail client,billing,must,yes,no,
+Garantie remboursement 14 jours,billing,could,yes,no,process manuel
+Publication automatique sur Vinted,core,skip,no,no,pas d'API publique
+Achat/stock/expédition,ops,skip,no,no,hors scope chez l'original aussi
+Scraping des marketplaces,core,skip,n/a,no,contraire aux CGU des plateformes
