@@ -61,6 +61,9 @@ create table source_products (
   category text,
   photo_count int not null default 0,
   purchase_price_cents int check (purchase_price_cents >= 0),
+  shipping_cost_cents int check (shipping_cost_cents >= 0),
+  price_source text check (price_source in ('api','extension','screenshot','manual')),
+  variants jsonb not null default '[]',
   currency text not null default 'EUR',
   extraction_status text not null default 'pending'
     check (extraction_status in ('pending','extracted','failed')),
@@ -124,6 +127,63 @@ create table listing_images (
 );
 create index on listing_images (user_id);
 
+-- ---------------------------------------------------------------- pricing_settings
+create table pricing_settings (
+  user_id uuid primary key references profiles(id) on delete cascade,
+  target_margin_pct numeric(5,2) not null default 40 check (target_margin_pct between 0 and 90),
+  fixed_duty_cents int not null default 0 check (fixed_duty_cents >= 0),
+  rounding text not null default 'x90' check (rounding in ('none','x90','x99','x9')),
+  updated_at timestamptz not null default now()
+);
+create trigger pricing_settings_updated before update on pricing_settings for each row execute function set_updated_at();
+
+-- ---------------------------------------------------------------- channel_accounts (plateformes connectées)
+create table channel_accounts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  channel text not null check (channel in ('vinted_pro','shopify','ebay')),
+  external_account_id text not null,
+  display_name text,
+  access_token_enc bytea not null,          -- chiffré côté application (AES-GCM)
+  refresh_token_enc bytea,
+  token_expires_at timestamptz,
+  scopes text[] not null default '{}',
+  status text not null default 'active' check (status in ('active','expired','revoked','error')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, channel, external_account_id)
+);
+create index on channel_accounts (user_id);
+create index on channel_accounts (token_expires_at) where status = 'active';
+create trigger channel_accounts_updated before update on channel_accounts for each row execute function set_updated_at();
+
+-- ---------------------------------------------------------------- publications (1 annonce x 1 plateforme)
+create table publications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  listing_id uuid not null references listings(id) on delete cascade,
+  channel_account_id uuid references channel_accounts(id) on delete set null,
+  channel text not null check (channel in ('vinted_pro','shopify','ebay','assisted')),
+  price_cents int not null check (price_cents >= 0),
+  currency text not null default 'EUR',
+  status text not null default 'pending'
+    check (status in ('pending','publishing','live','sold','removed','failed')),
+  external_id text,
+  external_url text,
+  error text,
+  published_at timestamptz,
+  sold_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index on publications (user_id, created_at desc);
+create index on publications (listing_id);
+create index on publications (channel_account_id);
+create unique index on publications (channel_account_id, external_id) where external_id is not null;
+create unique index publications_one_live_per_channel on publications (listing_id, channel_account_id)
+  where status in ('pending','publishing','live');
+create trigger publications_updated before update on publications for each row execute function set_updated_at();
+
 -- ---------------------------------------------------------------- usage_daily
 -- trial : compteur sur day = '1970-01-01' (quota « 1 au total »), fourni par le serveur
 create table usage_daily (
@@ -172,6 +232,13 @@ alter table source_files    enable row level security;
 alter table listings        enable row level security;
 alter table listing_images  enable row level security;
 alter table usage_daily     enable row level security;
+alter table pricing_settings enable row level security;
+alter table channel_accounts enable row level security;
+alter table publications     enable row level security;
+
+create policy own_all  on pricing_settings for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+-- jetons : jamais lisibles côté client ; une vue sans colonnes *_enc est exposée par l'API serveur
+create policy own_read on publications for select using (user_id = auth.uid());
 
 -- lecture seule pour le propriétaire
 create policy own_read on profiles       for select using (id = auth.uid());

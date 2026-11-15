@@ -20,6 +20,13 @@ Historique des annonces,app,should,inferred,no,
 Quotas journaliers par plan,billing,must,yes,no,
 Stripe Checkout + portail client,billing,must,yes,no,
 Garantie remboursement 14 jours,billing,could,yes,no,process manuel
-Publication automatique sur Vinted,core,skip,no,no,pas d'API publique
+Détection automatique du prix (AliExpress API),core,must,no,no,v2 demandée
+Extension navigateur Temu/Shein/autres,core,must,no,no,v2 demandée
+Moteur de prix de vente par plateforme,core,must,no,no,v2 demandée
+Publication automatique Vinted (API Vinted Pro),publish,must,no,no,compte Pro + liste blanche Vinted
+Publication automatique Shopify (+ Meta/Google/TikTok via sync),publish,must,no,no,
+Publication automatique eBay,publish,should,no,no,politique dropshipping eBay à vérifier
+Mode assisté Leboncoin/Wallapop/Marketplace/Vinted particulier,publish,must,no,no,pas d'API publique confirmée
+Retrait croisé après vente,publish,must,no,no,évite la double vente
 Achat/stock/expédition,ops,skip,no,no,hors scope chez l'original aussi
 Scraping des marketplaces,core,skip,n/a,no,contraire aux CGU des plateformes
